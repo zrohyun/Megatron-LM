@@ -2062,7 +2062,7 @@ def _add_rerun_machine_args(parser):
 def _add_initialization_args(parser):
     group = parser.add_argument_group(title='initialization')
 
-    group.add_argument('--seed', type=int, default=1234,
+    group.add_argument('--seed', type=int, default=2275,
                        help='Random seed used for python, numpy, '
                        'pytorch, and cuda.')
     group.add_argument('--data-parallel-random-init', action='store_true',

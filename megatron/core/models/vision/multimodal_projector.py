@@ -58,7 +58,7 @@ class MultimodalProjector(MegatronModule):
         else:
             raise Exception(f"Unsupported multimodal projection type {self.projector_type}")
 
-    def forward(self, hidden_states):
+    def forward(self, hidden_states, window_index: Optional[torch.LongTensor] = None):
         """Run multimodal projector.
 
         Args:
@@ -72,6 +72,11 @@ class MultimodalProjector(MegatronModule):
 
         if encoder_output_bias is not None:
             encoder_output = encoder_output + encoder_output_bias
+        
+        # LEEJH ADDED
+        if window_index is not None:
+            reverse_indices = torch.argsort(window_index)
+            encoder_output = encoder_output[reverse_indices, :].contiguous()
 
         # the encoder produces "viewed" tensor. This will result in schedule.py's
         # deallocate_output_tensor() throwing an error, so a viewless tensor is

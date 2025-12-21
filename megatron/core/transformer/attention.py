@@ -95,6 +95,8 @@ class SelfAttentionSubmodules:
     linear_proj: Union[ModuleSpec, type] = None
     q_layernorm: Union[ModuleSpec, type] = None
     k_layernorm: Union[ModuleSpec, type] = None
+    apply_rotary_fn: Union[ModuleSpec, type] = None                  # LEEJH ADDED
+    skip_post_attn_layernorm: bool = False                           # LEEJH ADDED
     post_attn_layernorm: Union[ModuleSpec, type] = None              # JHSHIN ADDED
 
 
@@ -108,6 +110,7 @@ class CrossAttentionSubmodules:
     linear_kv: Union[ModuleSpec, type] = None
     core_attention: Union[ModuleSpec, type] = None
     linear_proj: Union[ModuleSpec, type] = None
+    apply_rotary_fn: Union[ModuleSpec, type] = None                  # LEEJH ADDED
 
 
 class Attention(MegatronModule, ABC):
@@ -163,6 +166,12 @@ class Attention(MegatronModule, ABC):
         # To support both CUDA Graphs and key value with different hidden size
         self.key_hidden_size = self.hidden_size_per_attention_head
         self.val_hidden_size = self.hidden_size_per_attention_head
+        
+        # LEEJH ADDED
+        if hasattr(submodules, "apply_rotary_fn") and submodules.apply_rotary_fn is not None:
+            self.apply_rotary_fn = build_module(submodules.apply_rotary_fn)
+        else:
+            self.apply_rotary_fn = None
 
         self.core_attention = build_module(
             submodules.core_attention,
@@ -208,15 +217,16 @@ class Attention(MegatronModule, ABC):
             # the quantized tensor.
             set_save_original_input(self.linear_proj)
 
-        # POST-LN, JHSHIN.
-        if submodules.post_attn_layernorm is None and HAVE_TE:
-            submodules.post_attn_layernorm = TENorm
-        self.post_attn_layernorm = build_module(
-            submodules.post_attn_layernorm,
-            hidden_size=self.config.hidden_size,
-            config=self.config,
-            eps=self.config.layernorm_epsilon,
-        )
+        if not hasattr(submodules, 'skip_post_attn_layernorm') or not submodules.skip_post_attn_layernorm:
+            # POST-LN, JHSHIN.
+            if submodules.post_attn_layernorm is None and HAVE_TE:
+                submodules.post_attn_layernorm = TENorm
+            self.post_attn_layernorm = build_module(
+                submodules.post_attn_layernorm,
+                hidden_size=self.config.hidden_size,
+                config=self.config,
+                eps=self.config.layernorm_epsilon,
+            )
 
     def _checkpointed_attention_forward(
         self,
@@ -765,28 +775,33 @@ class Attention(MegatronModule, ABC):
             else:
                 cu_seqlens_q = cu_seqlens_kv = None
 
-            if q_pos_emb is not None:
-                # TODO VIJAY: simplify
-                if inference_context is None or inference_context.is_static_batching():
-                    query = apply_rotary_pos_emb(
-                        query,
-                        q_pos_emb,
+            if self.apply_rotary_fn is not None:
+                # ViT 를 위한 rotary_pos_emb
+                query = self.apply_rotary_fn(query, q_pos_emb, config=self.config, cu_seqlens=cu_seqlens_q)
+                key = self.apply_rotary_fn(key, k_pos_emb, config=self.config, cu_seqlens=cu_seqlens_kv)
+            else:
+                if q_pos_emb is not None:
+                    # TODO VIJAY: simplify
+                    if inference_context is None or inference_context.is_static_batching():
+                        query = apply_rotary_pos_emb(
+                            query,
+                            q_pos_emb,
+                            config=self.config,
+                            cu_seqlens=cu_seqlens_q,
+                            cp_group=self.model_comm_pgs.cp,
+                        )
+                    else:
+                        query = inference_context.apply_rotary_emb_query(
+                            query, q_pos_emb, self.config, cu_seqlens_q, self.model_comm_pgs.cp
+                        )
+                if k_pos_emb is not None:
+                    key = apply_rotary_pos_emb(
+                        key,
+                        k_pos_emb,
                         config=self.config,
-                        cu_seqlens=cu_seqlens_q,
+                        cu_seqlens=cu_seqlens_kv,
                         cp_group=self.model_comm_pgs.cp,
                     )
-                else:
-                    query = inference_context.apply_rotary_emb_query(
-                        query, q_pos_emb, self.config, cu_seqlens_q, self.model_comm_pgs.cp
-                    )
-            if k_pos_emb is not None:
-                key = apply_rotary_pos_emb(
-                    key,
-                    k_pos_emb,
-                    config=self.config,
-                    cu_seqlens=cu_seqlens_kv,
-                    cp_group=self.model_comm_pgs.cp,
-                )
 
             # TODO, can apply positional embedding to value_layer so it has
             # absolute positional embedding.
@@ -857,8 +872,10 @@ class Attention(MegatronModule, ABC):
         output, bias = self.linear_proj(core_attn_out)
         nvtx_range_pop(suffix="linear_proj")
 
-        # Post-LN, JHSHIN ADDED.
-        output = self.post_attn_layernorm(output)
+        if hasattr(self, 'submodules'):
+            if not hasattr(self.submodules, 'skip_post_attn_layernorm') or not self.submodules.skip_post_attn_layernorm:
+                # Post-LN, JHSHIN ADDED.
+                output = self.post_attn_layernorm(output)
 
         return output, bias
 

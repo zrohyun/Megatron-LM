@@ -328,7 +328,7 @@ def get_rng_state(ckpt_format: str):
         torch.distributed.all_gather_object(
             rng_state_list,
             rng_state,
-            # JHSHIN, enforces to use GLOOëbackend.
+            # JHSHIN, enforces to use GLOOï¿½backend.
             group=mpu.get_data_parallel_group_gloo())
     else:
         rng_state_list = [rng_state]
@@ -750,8 +750,8 @@ def maybe_save_dataloader_state(train_iterator, iteration, dataloader_save_path)
 
     torch.distributed.barrier(group=mpu.get_data_parallel_group())
 
-    if mpu.get_data_parallel_rank() == 0:
-        ensure_directory_exists(data_state_save_path)
+    # if mpu.get_data_parallel_rank() == 0:
+    ensure_directory_exists(data_state_save_path)
 
     torch.distributed.barrier(group=mpu.get_data_parallel_group())
 
