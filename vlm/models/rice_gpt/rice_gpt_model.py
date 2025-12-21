@@ -351,9 +351,13 @@ class RiceGPTModel(MegatronModule):
 
                 # If running inference, the language model KV cache will be updated for image token positions.
                 # Here we store the image tokens sequence length, which can be used as an offset to the KV cache later.
-                if inference_context is not None:
-                    inference_context.key_value_memory_dict["image_tokens_count"] = (
-                        image_embeddings.shape[0]
+                # if inference_context is not None:
+                #     inference_context.key_value_memory_dict["image_tokens_count"] = (
+                #         image_embeddings.shape[0]
+                #     )
+                if inference_params is not None:
+                    inference_params.key_value_memory_dict["image_tokens_count"] = (
+                        image_embeddings.shape[0] # * image_embeddings.shape[1]
                     )
             if pixel_values_videos is not None:
                 raise NotImplementedError(
