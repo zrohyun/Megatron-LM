@@ -16,3 +16,10 @@ onelogger.err
 runs/
 /test_cases/
 **/dist/
+/tmp/
+/checkpoints/
+/logs/
+/tools/convert_checkpoint/tmp/
+*.ipynb
+/vlm_examples/*/debugging/
+.DS_Store

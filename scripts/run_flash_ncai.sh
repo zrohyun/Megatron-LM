@@ -1,0 +1,1 @@
+NVTE_DEBUG=0 NVTE_DEBUG_LEVEL=0 NVTE_FLASH_ATTN=1 ./train_wbl_moe_flash_ncai.sh ./storage/checkpoints/wbl_flash_ncai_1002 ./storage/tokenizers/final_cand_132k_rebalanced-eng55p_kor20p_250828

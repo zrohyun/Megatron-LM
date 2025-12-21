@@ -1,0 +1,69 @@
+{
+    "name": "megatron-vlm",
+    "image": "ncai-wbl-registry.kr.ncr.ntruss.com/wbl-megatron-etri-ngc-py2506:0.6",
+    "runArgs": [
+      "--gpus", "all",
+      "--ipc", "host",
+      "--network", "host",
+      "--privileged",
+      "--cap-add=IPC_LOCK",
+      "--ulimit", "memlock=-1",
+      "--ulimit", "stack=67108864",
+      "--name", "megatron-wbl_dev_container"
+    ],
+    "workspaceFolder": "/workspace/${localWorkspaceFolderBasename}",
+    "workspaceMount": "source=${localWorkspaceFolder},target=/workspace/${localWorkspaceFolderBasename},type=bind,consistency=cached",
+    "remoteUser": "root",
+    "mounts": [
+        // HF cache
+        "source=hf-cache,target=/data/hf_cache,type=volume",
+        "source=hf-datasets,target=/data/hf_datasets,type=volume",
+
+        // VLM data
+        "source=/data/NetApp/ISTD_VOL02/varco-mllm,target=/workspace/varco-mllm,type=bind",
+        "source=/data/NetApp/ISTD_VOL01/multimodalmodel_team,target=/workspace/multimodalmodel_team,type=bind",
+        "source=/data/FlashBlade/klab_data,target=/workspace/klab_data,type=bind",
+        "source=/data/FlashBlade/nlp-llm/pretrain_stage1,target=/workspace/pretrain_stage1,type=bind"
+    ],
+    "features": {
+        "ghcr.io/devcontainers/features/common-utils:2": {}
+    },
+    "containerEnv": {
+        "HOME": "/root",
+        "TRANSFORMERS_CACHE": "/data/hf_cache",
+        "HF_HOME": "/data/hf_cache",
+        "HF_DATASETS_CACHE": "/data/hf_datasets",
+        "WORKSPACE_DIR": "/workspace",
+        "LOCAL_WORKSPACE_DIR": "/workspace"
+    },
+    "customizations": {
+        "vscode": {
+            "extensions": [
+                "ms-python.python",
+                "ms-toolsai.jupyter",
+                "ms-python.vscode-pylance",
+                "charliermarsh.ruff",
+                "ms-azuretools.vscode-docker",
+                "redhat.vscode-yaml",
+                "DavidAnson.vscode-markdownlint",
+                "mutantdino.resourcemonitor"
+            ],
+            "settings": {
+                "dev.containers.copyGitConfig": false,
+                "editor.formatOnSave": true,
+                "editor.formatOnType": true,
+                // "python.defaultInterpreterPath": "/usr/bin/python3",
+                "terminal.integrated.defaultProfile.linux": "bash"
+            },
+            "files.watcherExclude": { 
+                "**/.venv/**": true,
+                "**/.git/objects/**": true,
+                "**/.git/subtree-cache/**": true
+            },
+            "search.exclude": { 
+                "**/.venv": true,
+                "**/.git": true
+            }
+        }
+    }
+  }

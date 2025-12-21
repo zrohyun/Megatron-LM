@@ -1,0 +1,125 @@
+apiVersion: kubeflow.org/v1
+kind: PyTorchJob
+metadata:
+  name: ncai-wbl-vlm-megatron-job
+  namespace: p-ncai-etri-wbl
+  labels:
+    app: ncai-wbl-vlm-megatron
+spec:
+  # elastic은 유지하되, 여기서는 자동 학습 시작 안 하므로 단지 파드 생성을 위해 사용
+  elasticPolicy:
+    rdzvId: ncai-wbl-vlm-megatron
+    rdzvBackend: c10d
+    minReplicas: 1
+    maxReplicas: 1
+  nprocPerNode: "8"
+  runPolicy:
+    cleanPodPolicy: None
+    schedulingPolicy:
+      minAvailable: 1
+  pytorchReplicaSpecs:
+    Worker:
+      replicas: 1
+      restartPolicy: OnFailure
+      template:
+        metadata:
+          labels:
+            app: ncai-wbl-vlm-megatron
+          annotations:
+            sidecar.istio.io/inject: "false"
+        spec:
+          securityContext:
+            runAsUser: 0
+            runAsGroup: 0
+          nodeSelector:
+            mlx.navercorp.com/zone: h100-i001v8
+          imagePullSecrets:
+            - name: ncai-wbl-registry-secret
+          # 서로 다른 노드로 분산 배치 추천(원하면 주석 해제)
+          # affinity:
+          #   podAntiAffinity:
+          #     preferredDuringSchedulingIgnoredDuringExecution:
+          #       - weight: 100
+          #         podAffinityTerm:
+          #           labelSelector:
+          #             matchExpressions:
+          #               - key: app
+          #                 operator: In
+          #                 values: ["dev-wbl-megatron"]
+          #           topologyKey: "kubernetes.io/hostname"
+          containers:
+          - name: pytorch   # PyTorchJob은 컨테이너 이름 'pytorch' 권장
+            image: ncai-wbl-registry.kr.ncr.ntruss.com/wbl-megatron-etri-ngc-py2506:0.6
+            imagePullPolicy: IfNotPresent
+            securityContext:
+              capabilities:
+                add: ["IPC_LOCK"]
+            command: ["bash", "-lc"]
+            args: ["trap : TERM INT; while true; do sleep 3600; done"]
+            env:
+            - name: CUDA_DEVICE_MAX_CONNECTIONS
+              value: "1"
+            - name: NVTE_ALLOW_NONDETERMINISTIC_ALGO
+              value: "1"
+            - name: NVTE_FLASH_ATTN
+              value: "1"
+            - name: NCCL_DEBUG
+              value: "INFO"
+            - name: MEGATRON_LOGGING_LEVEL
+              value: "20"
+            - name: NCCL_IB_TIMEOUT
+              value: "24"
+            - name: NCCL_IB_HCA
+              value: "^=mlx5_1,mlx5_0"
+            - name: GLOO_SOCKET_FAMILY
+              value: "AF_INET"
+            - name: TORCH_CPP_LOG_LEVEL
+              value: "0"
+            # VS Code/디버깅/런데부 등에서 관례적으로 쓰는 포트 노출(포워딩 용도)
+            ports:
+              - containerPort: 29500   # rdzv
+              - containerPort: 6006    # tensorboard(선택)
+            resources:
+              limits:
+                memory: "512Gi"
+                cpu: 32
+                nvidia.com/gpu: 8
+                rdma/hca_shared_devices_a: 1
+              requests:
+                memory: "512Gi"
+                cpu: 32
+                nvidia.com/gpu: 8
+                rdma/hca_shared_devices_a: 1
+            volumeMounts:
+            - mountPath: /dev/shm
+              name: shared-memory
+            - mountPath: "/mnt/data"
+              name: training-data
+              # readOnly: true
+            - mountPath: "/mnt/output2"
+              name: training-output2
+            - mountPath: "/mnt/output/ncai"
+              name: training-output
+              subPath: ncai
+            - mountPath: "/mnt/output/pretraining_data"
+              name: training-output
+              subPath: pretraining_data
+            - mountPath: "/mnt/output/pretraining_data_merged"
+              name: training-output
+              subPath: pretraining_data_merged
+          volumes:
+          - name: shared-memory
+            emptyDir:
+              medium: Memory
+          - name: training-data
+            persistentVolumeClaim:
+              claimName: training-data
+          - name: training-output
+            persistentVolumeClaim:
+              claimName: training-output
+          - name: training-output2
+            persistentVolumeClaim:
+              claimName: training-output2
+          - name: training-checkpoint
+            persistentVolumeClaim:
+              claimName: training-checkpoint
