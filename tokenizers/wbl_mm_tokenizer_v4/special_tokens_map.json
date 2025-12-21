@@ -1,0 +1,28 @@
+{
+  "additional_special_tokens": [
+    "<|role_start|>",
+    "<|role_end|>",
+    "<|START|>",
+    "<|END|>",
+    "<gro>",
+    "<ocr>",
+    "<delim>",
+    "<char>",
+    "</char>",
+    "<obj>",
+    "</obj>",
+    "<bbox>",
+    "</bbox>",
+    "<quad>",
+    "</quad>",
+    "<|vision_start|>",
+    "<|vision_end|>",
+    "<|vision_pad|>",
+    "<|image_pad|>",
+    "<|video_pad|>"
+  ],
+  "bos_token": "<|START|>",
+  "eos_token": "<|END|>",
+  "pad_token": "<|END|>",
+  "unk_token": "<unk>"
+}

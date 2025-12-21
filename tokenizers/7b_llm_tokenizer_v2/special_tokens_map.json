@@ -1,0 +1,12 @@
+{
+  "bos_token": "<|START|>",
+  "eos_token": "<|END|>",
+  "pad_token": "<|END|>",
+  "unk_token": "<unk>",
+  "additional_special_tokens": [
+    "<|role_start|>",
+    "<|role_end|>",
+    "<|START|>",
+    "<|END|>"
+  ]
+}
