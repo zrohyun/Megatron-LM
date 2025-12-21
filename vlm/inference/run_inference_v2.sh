@@ -17,7 +17,7 @@ MEGATRON_PATH="${TRAINING_PATH}"
 # 환경 변수 설정 (rice_gpt_inference.py와 동일)
 export MEGATRON_PATH="${MEGATRON_PATH}"
 export CUDA_DEVICE_MAX_CONNECTIONS=1
-export CUDA_VISIBLE_DEVICES=2
+export CUDA_VISIBLE_DEVICES=0
 
 # 분산 학습 환경 변수 (rice_gpt_inference.py와 동일하게 직접 설정)
 export RANK=0
