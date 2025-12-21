@@ -1,0 +1,56 @@
+__module__: megatron.energon
+__class__: Metadataset
+
+splits:
+  train:
+    datasets:
+      - weight: 1.
+        path: /mnt/data/vlm_data/vv_2_0_llava-pretrain/v2025.11.06  # 558,128 samples
+        subflavors:
+          augmentation: false
+
+      # FineVision datasets
+      - weight: 1.
+        path: /mnt/data/vlm_data/finevision_densefusion_1m/v2025.11.25
+        subflavors:
+          augmentation: false
+      - weight: 1.
+        path: /mnt/data/vlm_data/finevision_image_textualization_filtered/v2025.11.25
+        subflavors:
+          augmentation: false
+      # - weight: 1.
+      #   path: /mnt/data/vlm_data/finevision_laion_gpt4v/v2025.11.25
+      #   subflavors:
+      #     augmentation: false
+      - weight: 1.
+        path: /mnt/data/vlm_data/finevision_localized_narratives/v2025.11.25
+        subflavors:
+          augmentation: false
+      # - weight: 1.
+      #   path: /mnt/data/vlm_data/finevision_sharegpt4o/v2025.11.25
+      #   subflavors:
+      #     augmentation: false
+      - weight: 1.
+        path: /mnt/data/vlm_data/finevision_sharegpt4v_coco/v2025.11.25
+        subflavors:
+          augmentation: false
+      - weight: 1.
+        path: /mnt/data/vlm_data/finevision_sharegpt4v_knowledge/v2025.11.25
+        subflavors:
+          augmentation: false
+      - weight: 1.
+        path: /mnt/data/vlm_data/finevision_sharegpt4v_llava/v2025.11.25
+        subflavors:
+          augmentation: false
+      - weight: 1.
+        path: /mnt/data/vlm_data/finevision_sharegpt4v_sam/v2025.11.25
+        subflavors:
+          augmentation: false
+      - weight: 1.
+        path: /mnt/data/vlm_data/finevision_textcaps/v2025.11.25
+        subflavors:
+          augmentation: false
+      # - weight: 1.
+      #   path: /mnt/data/vlm_data/finevision_diagram_image_to_text/v2025.11.25
+      #   subflavors:
+      #     augmentation: false
