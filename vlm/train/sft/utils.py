@@ -302,3 +302,22 @@ def get_batch_on_this_tp_rank(data_iterator):
     }
 
     return batch
+
+
+def make_attn_mask_4d(pad_mask_bool: torch.Tensor) -> torch.Tensor:
+    """
+    pad_mask_bool: [B,S], True=PAD
+    return: [B,1,S,S], True=masked
+    """
+    B, S = pad_mask_bool.shape
+    device = pad_mask_bool.device
+
+    causal = torch.triu(
+        torch.ones((S, S), device=device, dtype=torch.bool),
+        diagonal=1
+    )                              # [S,S]
+    causal = causal.unsqueeze(0).unsqueeze(0)  # [1,1,S,S]
+    key_pad = pad_mask_bool.unsqueeze(1).unsqueeze(2)  # [B,1,1,S]
+    attn_mask = causal | key_pad   # [B,1,S,S]
+
+    return attn_mask

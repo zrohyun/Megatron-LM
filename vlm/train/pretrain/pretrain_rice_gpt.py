@@ -26,7 +26,7 @@ from vlm.models.qwen_vl.utils import get_inputs_on_this_cp_rank
 from vlm.models import get_model_provider, get_model_family
 from vlm.train.megatron_trainer import MegatronTrainer
 from vlm.train.trainer_builder import register_model_trainer
-from vlm.train.sft.utils import build_sft_data_collator
+from vlm.train.sft.utils import build_sft_data_collator, make_attn_mask_4d
 from vlm.data.multimodal.dataloader_provider import (
     get_train_dataset,
     get_train_loader,
@@ -142,6 +142,8 @@ def get_batch(data_iterator):
     if cu_lengths.shape == torch.Size([1, 1]):
         for i in range(attn_mask.shape[0]):
             loss_mask[i, (attn_mask[i] == False).sum() - 1] = 0
+            
+        attn_mask = make_attn_mask_4d(attn_mask)
     else:
         assert cu_lengths.shape[0] == 1, "micro-batch-size must be 1 for packing"
         # for i in range(cu_lengths.shape[0]):
@@ -161,8 +163,8 @@ def get_batch(data_iterator):
         labels = get_inputs_on_this_cp_rank(labels.transpose(0, 1)).transpose(0, 1)
         loss_mask = get_inputs_on_this_cp_rank(loss_mask.transpose(0, 1)).transpose(0, 1)
 
-    attn_mask = None
     position_ids = None
+    
     return (
         imgs,
         thw,
@@ -258,13 +260,13 @@ def forward_step(data_iterator, model):
 
     with stimer:
         output_tensor = model(
-            images,
-            image_grid_thw,
-            input_ids,
-            position_ids,
-            attention_mask,
-            labels,
-            packed_seq_params,
+            images=images,
+            image_grid_thw=image_grid_thw,
+            input_ids=input_ids,
+            position_ids=position_ids,
+            attention_mask=attention_mask,
+            labels=labels,
+            packed_seq_params=packed_seq_params,
             pixel_values_videos=pixel_values_videos,
             video_grid_thw=video_grid_thw
         )
@@ -284,7 +286,7 @@ def train_valid_test_dataset_provider(train_val_test_num_samples):
     # 각 data 의 키는 (dict_keys(['__key__', '__restore_key__', '__subflavor__', 'tokens', 'labels', 'num_tiles', 'max_lengths', 'cu_lengths', 'attn_mask', 'imgs', 'pixel_values_videos', 'image_grid_thw', 'video_grid_thw']))
     train_dataloader = get_train_loader(train_dataset, collator)
     return train_dataloader, None, None
-    
+
 
 @register_model_trainer(
     model_family=[
