@@ -1,0 +1,371 @@
+__module__: megatron.energon
+__class__: Metadataset
+
+splits:
+  train:
+    datasets:
+      - weight: 1.
+        path: /mnt/data/vlm_data/vv_2_0_llava-onevision-data-s3/v2025.12.09
+        subflavors:
+          augmentation: false
+          source: vv_2_0_llava-onevision-data-s3
+      - weight: 1.
+        path: /mnt/data/vlm_data/vv_2_0_m4-instruct-data-s3-part1/v2025.11.27
+        subflavors:
+          augmentation: false
+          source: vv_2_0_m4-instruct-data-s3-part1
+      - weight: 1.
+        path: /mnt/data/vlm_data/vv_2_0_m4-instruct-data-s3-part2/v2025.11.28
+        subflavors:
+          augmentation: false
+          source: vv_2_0_m4-instruct-data-s3-part2
+      - weight: 1.
+        path: /mnt/data/vlm_data/vv_2_0_m4-instruct-data-s3-part3/v2025.11.28
+        subflavors:
+          augmentation: false
+          source: vv_2_0_m4-instruct-data-s3-part3
+      - weight: 1.
+        path: /mnt/data/vlm_data/vv_2_0_m4-instruct-data-s3-part4/v2025.11.28
+        subflavors:
+          augmentation: false
+          source: vv_2_0_m4-instruct-data-s3-part4
+      - weight: 1.
+        path: /mnt/data/vlm_data/vv_2_0_pixmo/v2025.11.06
+        subflavors:
+          augmentation: false
+          source: vv_2_0_pixmo
+      - weight: 1.
+        path: /mnt/data/vlm_data/vv_2_0_kollava-instruct-313k/v2025.11.06
+        subflavors:
+          augmentation: false
+          source: vv_2_0_kollava-instruct-313k
+      - weight: 1.
+        path: /mnt/data/vlm_data/vv_2_0_mmc-instruction/v2025.11.06
+        subflavors:
+          augmentation: false
+          source: vv_2_0_mmc-instruction
+      - weight: 1.
+        path: /mnt/data/vlm_data/vv_2_0_docmatix/v2025.11.20
+        subflavors:
+          augmentation: false
+          source: vv_2_0_docmatix
+      - weight: 1.
+        path: /mnt/data/vlm_data/vv_2_0_k-wikipediaqa/v2025.11.06
+        subflavors:
+          augmentation: false
+          source: vv_2_0_k-wikipediaqa
+      - weight: 1.
+        path: /mnt/data/vlm_data/vv_2_0_synthetic_news/v2025.11.20
+        subflavors:
+          augmentation: false
+          source: vv_2_0_synthetic_news
+      - weight: 1.
+        path: /mnt/data/vlm_data/vv_2_0_k-mathqa/v2025.11.20
+        subflavors:
+          augmentation: false
+          source: vv_2_0_k-mathqa
+      - weight: 1.
+        path: /mnt/data/vlm_data/vv_2_0_multiui/v2025.11.06
+        subflavors:
+          augmentation: false
+          source: vv_2_0_multiui
+      - weight: 1.
+        path: /mnt/data/vlm_data/vv_2_0_osprey-conversation/v2025.11.06
+        subflavors:
+          augmentation: false
+          source: vv_2_0_osprey-conversation
+      - weight: 1.
+        path: /mnt/data/vlm_data/vv_2_0_k-referring-char/v2025.11.06
+        subflavors:
+          augmentation: false
+          source: vv_2_0_k-referring-char
+      - weight: 1.
+        path: /mnt/data/vlm_data/vv_2_0_llava-onevision-data-ocr-s3/v2025.11.20
+        subflavors:
+          augmentation: false
+          source: vv_2_0_llava-onevision-data-ocr-s3
+      # - weight: 1.
+      #   path: /mnt/data/vlm_data/vv_2_0_idl-wds/v2025.12.11
+      #   subflavors:
+      #     augmentation: false
+      #     source: vv_2_0_idl-wds
+      - weight: 1.
+        path: /mnt/data/vlm_data/vv_2_0_olmocr-mix/v2025.12.11
+        subflavors:
+          augmentation: false
+          source: vv_2_0_olmocr-mix
+      - weight: 1.
+        path: /mnt/data/vlm_data/vv_2_0_cord-train/v2025.11.20
+        subflavors:
+          augmentation: false
+          source: vv_2_0_cord-train
+      - weight: 1.
+        path: /mnt/data/vlm_data/vv_2_0_icdar2013-train/v2025.11.20
+        subflavors:
+          augmentation: false
+          source: vv_2_0_icdar2013-train
+      - weight: 1.
+        path: /mnt/data/vlm_data/vv_2_0_icdar2015-train/v2025.11.20
+        subflavors:
+          augmentation: false
+          source: vv_2_0_icdar2015-train
+      - weight: 1.
+        path: /mnt/data/vlm_data/vv_2_0_latex_ocr/v2025.11.20
+        subflavors:
+          augmentation: false
+          source: vv_2_0_latex_ocr
+      - weight: 1.
+        path: /mnt/data/vlm_data/vv_2_0_k-ocr/v2025.12.11
+        subflavors:
+          augmentation: false
+          source: vv_2_0_k-ocr
+      - weight: 1.
+        path: /mnt/data/vlm_data/vv_2_0_infinity-instruct/v2025.12.11
+        subflavors:
+          augmentation: false
+          source: vv_2_0_infinity-instruct
+      - weight: 1.
+        path: /mnt/data/vlm_data/vv_2_0_t_magpie-kor/v2025.12.11
+        subflavors:
+          augmentation: false
+          source: vv_2_0_t_magpie-kor
+      - weight: 1.
+        path: /mnt/data/vlm_data/vv_2_0_t_korean_fluency/v2025.12.02
+        subflavors:
+          augmentation: false
+          source: vv_2_0_t_korean_fluency
+      - weight: 1.
+        path: /mnt/data/vlm_data/wbl_self_introduction/v2025.12.09
+        subflavors:
+          augmentation: false
+          source: wbl_self_introduction
+      - weight: 1.
+        path: /mnt/data/vlm_data/finevision_finqa/v2025.11.25
+        subflavors:
+          augmentation: false
+          source: finevision_finqa
+      - weight: 1.
+        path: /mnt/data/vlm_data/finevision_robut_sqa/v2025.11.25
+        subflavors:
+          augmentation: false
+          source: finevision_robut_sqa
+      - weight: 1.
+        path: /mnt/data/vlm_data/finevision_robut_wikisql/v2025.11.25
+        subflavors:
+          augmentation: false
+          source: finevision_robut_wikisql
+      - weight: 1.
+        path: /mnt/data/vlm_data/finevision_synthchartnet/v2025.11.25
+        subflavors:
+          augmentation: false
+          source: finevision_synthchartnet
+      - weight: 1.
+        path: /mnt/data/vlm_data/finevision_tat_qa/v2025.11.25
+        subflavors:
+          augmentation: false
+          source: finevision_tat_qa
+      - weight: 1.
+        path: /mnt/data/vlm_data/finevision_vqaonbd/v2025.11.25
+        subflavors:
+          augmentation: false
+          source: finevision_vqaonbd
+      - weight: 1.
+        path: /mnt/data/vlm_data/finevision_idk/v2025.11.25
+        subflavors:
+          augmentation: false
+          source: finevision_idk
+      - weight: 1.
+        path: /mnt/data/vlm_data/finevision_lnqa/v2025.11.25
+        subflavors:
+          augmentation: false
+          source: finevision_lnqa
+      - weight: 1.
+        path: /mnt/data/vlm_data/finevision_lvis_instruct4v/v2025.11.25
+        subflavors:
+          augmentation: false
+          source: finevision_lvis_instruct4v
+      - weight: 1.
+        path: /mnt/data/vlm_data/finevision_mimic_cgd/v2025.11.25
+        subflavors:
+          augmentation: false
+          source: finevision_mimic_cgd
+      - weight: 1.
+        path: /mnt/data/vlm_data/finevision_mmevol/v2025.11.25
+        subflavors:
+          augmentation: false
+          source: finevision_mmevol
+      - weight: 1.
+        path: /mnt/data/vlm_data/finevision_mmra/v2025.11.25
+        subflavors:
+          augmentation: false
+          source: finevision_mmra
+      - weight: 1.
+        path: /mnt/data/vlm_data/finevision_clevr_math/v2025.11.25
+        subflavors:
+          augmentation: false
+          source: finevision_clevr_math
+      - weight: 1.
+        path: /mnt/data/vlm_data/finevision_intergps/v2025.11.25
+        subflavors:
+          augmentation: false
+          source: finevision_intergps
+      - weight: 1.
+        path: /mnt/data/vlm_data/finevision_memotion/v2025.11.25
+        subflavors:
+          augmentation: false
+          source: finevision_memotion
+      - weight: 1.
+        path: /mnt/data/vlm_data/finevision_a_okvqa/v2025.11.25
+        subflavors:
+          augmentation: false
+          source: finevision_a_okvqa
+      - weight: 1.
+        path: /mnt/data/vlm_data/finevision_arxivqa/v2025.11.25
+        subflavors:
+          augmentation: false
+          source: finevision_arxivqa
+      - weight: 1.
+        path: /mnt/data/vlm_data/finevision_bentham/v2025.11.25
+        subflavors:
+          augmentation: false
+          source: finevision_bentham
+      - weight: 1.
+        path: /mnt/data/vlm_data/finevision_blockdiagramcomputerized/v2025.11.25
+        subflavors:
+          augmentation: false
+          source: finevision_blockdiagramcomputerized
+      - weight: 1.
+        path: /mnt/data/vlm_data/finevision_blockdiagramhandwritten/v2025.11.25
+        subflavors:
+          augmentation: false
+          source: finevision_blockdiagramhandwritten
+      - weight: 1.
+        path: /mnt/data/vlm_data/finevision_handwriting_forms/v2025.11.25
+        subflavors:
+          augmentation: false
+          source: finevision_handwriting_forms
+      - weight: 1.
+        path: /mnt/data/vlm_data/finevision_invoices_receipts/v2025.11.25
+        subflavors:
+          augmentation: false
+          source: finevision_invoices_receipts
+      - weight: 1.
+        path: /mnt/data/vlm_data/finevision_mapqa/v2025.11.25
+        subflavors:
+          augmentation: false
+          source: finevision_mapqa
+      - weight: 1.
+        path: /mnt/data/vlm_data/finevision_mapqa_mathv360k/v2025.11.25
+        subflavors:
+          augmentation: false
+          source: finevision_mapqa_mathv360k
+      - weight: 1.
+        path: /mnt/data/vlm_data/finevision_ocrvqa/v2025.11.25
+        subflavors:
+          augmentation: false
+          source: finevision_ocrvqa
+      - weight: 1.
+        path: /mnt/data/vlm_data/finevision_pdfvqa/v2025.11.25
+        subflavors:
+          augmentation: false
+          source: finevision_pdfvqa
+      - weight: 1.
+        path: /mnt/data/vlm_data/finevision_screenqa/v2025.11.25
+        subflavors:
+          augmentation: false
+          source: finevision_screenqa
+      - weight: 1.
+        path: /mnt/data/vlm_data/finevision_sujet_finance/v2025.11.25
+        subflavors:
+          augmentation: false
+          source: finevision_sujet_finance
+      - weight: 1.
+        path: /mnt/data/vlm_data/finevision_textvqa/v2025.11.25
+        subflavors:
+          augmentation: false
+          source: finevision_textvqa
+      - weight: 1.
+        path: /mnt/data/vlm_data/finevision_ureader_kg_processed/v2025.11.25
+        subflavors:
+          augmentation: false
+          source: finevision_ureader_kg_processed
+      - weight: 1.
+        path: /mnt/data/vlm_data/finevision_ureader_qa_processed/v2025.11.25
+        subflavors:
+          augmentation: false
+          source: finevision_ureader_qa_processed
+      - weight: 1.
+        path: /mnt/data/vlm_data/finevision_text_code_feedback/v2025.12.04
+        subflavors:
+          augmentation: false
+          source: finevision_text_code_feedback
+      - weight: 1.
+        path: /mnt/data/vlm_data/finevision_text_codefeedback_filtered_instruction/v2025.12.04
+        subflavors:
+          augmentation: false
+          source: finevision_text_codefeedback_filtered_instruction
+      - weight: 1.
+        path: /mnt/data/vlm_data/finevision_text_infinitymath/v2025.12.04
+        subflavors:
+          augmentation: false
+          source: finevision_text_infinitymath
+      - weight: 1.
+        path: /mnt/data/vlm_data/finevision_text_mathinstruct/v2025.12.04
+        subflavors:
+          augmentation: false
+          source: finevision_text_mathinstruct
+      - weight: 1.
+        path: /mnt/data/vlm_data/finevision_text_mathstepdpo10k/v2025.12.04
+        subflavors:
+          augmentation: false
+          source: finevision_text_mathstepdpo10k
+      - weight: 1.
+        path: /mnt/data/vlm_data/finevision_text_numinamath_cot/v2025.12.04
+        subflavors:
+          augmentation: false
+          source: finevision_text_numinamath_cot
+      - weight: 1.
+        path: /mnt/data/vlm_data/finevision_text_openhermes_2_5/v2025.12.04
+        subflavors:
+          augmentation: false
+          source: finevision_text_openhermes_2_5
+      - weight: 1.
+        path: /mnt/data/vlm_data/finevision_text_openorca/v2025.12.04
+        subflavors:
+          augmentation: false
+          source: finevision_text_openorca
+      - weight: 1.
+        path: /mnt/data/vlm_data/finevision_text_orcamath/v2025.12.04
+        subflavors:
+          augmentation: false
+          source: finevision_text_orcamath
+      - weight: 1.
+        path: /mnt/data/vlm_data/finevision_text_pythoncode25k/v2025.12.04
+        subflavors:
+          augmentation: false
+          source: finevision_text_pythoncode25k
+      - weight: 1.
+        path: /mnt/data/vlm_data/finevision_text_pythoncodealpaca/v2025.12.04
+        subflavors:
+          augmentation: false
+          source: finevision_text_pythoncodealpaca
+      - weight: 1.
+        path: /mnt/data/vlm_data/finevision_text_ruozhiba/v2025.12.04
+        subflavors:
+          augmentation: false
+          source: finevision_text_ruozhiba
+      - weight: 1.
+        path: /mnt/data/vlm_data/finevision_text_theoremqa/v2025.12.04
+        subflavors:
+          augmentation: false
+          source: finevision_text_theoremqa
+      - weight: 1.
+        path: /mnt/data/vlm_data/finevision_text_wizardlm_evol/v2025.12.04
+        subflavors:
+          augmentation: false
+          source: finevision_text_wizardlm_evol
+      - weight: 1.
+        path: /mnt/data/vlm_data/finevision_text_openmathinstruct-2/v2025.12.04
+        subflavors:
+          augmentation: false
+          source: finevision_text_openmathinstruct-2
