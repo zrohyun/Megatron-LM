@@ -35,14 +35,23 @@ spec:
                 - weight: 100
                   preference:
                     matchExpressions:
+                      # - key: kubernetes.io/hostname
+                      #   operator: In
+                      #   values:
+                      #     - h100-i001v8-w-6c55
+                      #     - h100-i001v8-w-4fd0
+                      #     - h100-i001v8-w-7eb9
+                      #     - h100-i001v8-w-3884
+                      #     - h100-i001v8-w-f16c
+                      #     - h100-i001v8-w-cb03
+                      #     - h100-i001v8-w-00d7
+                      #     - h100-i001v8-w-6c55
                       - key: kubernetes.io/hostname
                         operator: NotIn
                         values:
-                          - h100-i001v8-w-05fe
-                      - key: kubernetes.io/hostname
-                        operator: NotIn
-                        values:
-                          - h100-i001v8-w-016a
+                          - h100-i001v8-w-860e
+                          - h100-i001v8-w-4f85
+                          - h100-i001v8-w-7af3
           imagePullSecrets:
             - name: ncai-wbl-registry-secret  # 프로젝트에 해당되는 Image Pull Secret 명
           # 서로 다른 노드로 분산 배치 추천(원하면 주석 해제)
@@ -79,22 +88,22 @@ spec:
               TM=$(date "+%Y-%m-%d_%H:%M:%S")
 
               TRAINING_PATH=/mnt/output/ncai/multi_modal/Megatron-LM
-              MEGATRON_PATH="${TRAINING_PATH%/}megatron"
+              MEGATRON_PATH="${TRAINING_PATH}/megatron"
 
               DATA_PATH="${TRAINING_PATH}/vlm/stage_1_dataset.yaml"
-              TOKENIZER_PATH="${TRAINING_PATH}/tokenizers/wbl_mm_tokenizer_v3"
-              CHECKPOINT_PATH="${TRAINING_PATH}/checkpoints/vlm_merged_wbl_llm_sft_lr_3e6_seqlen_16384_iter_0008300"
+              TOKENIZER_PATH="${TRAINING_PATH}/tokenizers/wbl_mm_tokenizer_v5"
+              CHECKPOINT_PATH="${TRAINING_PATH}/checkpoints/merged/vlm_20251217__wbl_llm_sft_1206_lr_3e6_seq_16384"
 
               TP=1
               PP=1
-              SEQ_LEN=4096
-              MBS=8
-              GBS=512
+              SEQ_LEN=8192
+              MBS=4
+              GBS=256
               # NSTEP=8720
-              NSAMPLES=2100000     # 558128
+              NSAMPLES=2030000     # 558128
 
-              DEFAULT_OUTPUT_DIR="/mnt/output/ncai/multi_modal/outputs/vlm_stage_1"
-              JOB_NAME="rice_gpt_stage_1_7b_a1b_gbs_${GBS}_no_moe_loss_finevision_data__llm_sft_lr_3e6_seqlen_16384_iter_0008300"
+              DEFAULT_OUTPUT_DIR="/mnt/checkpoint/ncai/multimodal/outputs/vlm_stage_1"
+              JOB_NAME="V6_rice_gpt_stage_1_7b_a1b_gbs_${GBS}_no_moe_loss_finevision_data_tk_v5_vit_rotary_emb_win_size__vlm_20251217__wbl_llm_sft_1206_lr_3e6_seq_16384"
 
               SAVE_CKPT_PATH="${DEFAULT_OUTPUT_DIR}/checkpoints/${JOB_NAME}"
               TENSORBOARD_PATH="${DEFAULT_OUTPUT_DIR}/tensorboards/${JOB_NAME}"
@@ -186,7 +195,7 @@ spec:
                   --trainable-modules vision_projection
                   --micro-batch-size "${MBS}"
                   --global-batch-size "${GBS}"
-                  --lr 1.0e-4
+                  --lr 5.0e-5
                   --min-lr 1.0e-6
                   --clip-grad 1.0
                   --weight-decay 0
@@ -209,6 +218,7 @@ spec:
                   --save-interval 2000
                   --ckpt-format torch_dist
                   --dataloader-save "${SAVE_CKPT_PATH}/dataloader"
+                  --exit-on-missing-checkpoint
 
                   --ckpt-fully-parallel-load
                   --recompute-granularity full
@@ -220,10 +230,13 @@ spec:
                   --no-load-optim
 
                   --eval-iters 0
+              
+                  # --no-check-for-nan-in-loss-and-grad
+                  # --cross-entropy-loss-fusion
+                  # --cross-entropy-fusion-impl 'te'
 
-                  --no-check-for-nan-in-loss-and-grad
-                  --cross-entropy-loss-fusion
-                  --cross-entropy-fusion-impl 'te'
+                  --sft
+                  --finetune
               )
 
               MODEL_PARALLEL_ARGS=(
@@ -235,7 +248,7 @@ spec:
                   # --sequence-parallel
                   --use-distributed-optimizer
                   --cp-comm-type 'p2p'
-                  --distributed-backend nccl
+                  # --distributed-backend nccl
               )
 
               # FP8_ARGS=(
@@ -263,8 +276,6 @@ spec:
               TM=$(date "+%Y-%m-%d_%H:%M:%S")
               logfile="${SAVE_CKPT_PATH}/run_${TM}_tp${TP}_pp${PP}_seqlen${SEQ_LEN}_mbs${MBS}_gbs${GBS}.log"
 
-              # export OFFLINE_PACKED_DATA='1'
-              # export OFFLINE_PACKING_VQA='1'
               export PYTORCH_CUDA_ALLOC_CONF=garbage_collection_threshold:0.72
 
               PYTHONPATH="$TRAINING_PATH:$MEGATRON_PATH" \
@@ -346,6 +357,8 @@ spec:
               readOnly: true
             - mountPath: "/mnt/output2"
               name: training-output2
+            - mountPath: "/mnt/checkpoint"
+              name: training-checkpoint
             - mountPath: "/mnt/output/ncai"
               name: training-output
               subPath: ncai

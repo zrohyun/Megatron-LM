@@ -101,6 +101,8 @@ spec:
             - mountPath: "/mnt/output/ncai"
               name: training-output
               subPath: ncai
+            - mountPath: "/mnt/checkpoint"
+              name: training-checkpoint
             - mountPath: "/mnt/output/pretraining_data"
               name: training-output
               subPath: pretraining_data
@@ -123,3 +125,4 @@ spec:
           - name: training-checkpoint
             persistentVolumeClaim:
               claimName: training-checkpoint
+

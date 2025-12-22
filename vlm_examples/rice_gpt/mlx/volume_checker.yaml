@@ -1,0 +1,64 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: volume-checker-leejh   # {train|test}-소속-id 으로 수정 필요 / 실행중인 파드와 중복이 되면 안됩니다.
+  namespace: p-ncai-etri-wbl
+  labels:
+    app: volume-checker-leejh
+spec:
+  nodeSelector:
+    mlx.navercorp.com/zone: h100-i001v8  # <- 반드시 추가
+  containers:
+    - name: shell
+      image: ubuntu:22.04
+      command: [ "sh", "-c", "sleep infinity" ]
+      env:
+        - name: NVIDIA_VISIBLE_DEVICES
+          value: "none"
+      resources:
+        limits:
+          cpu: "2"
+          memory: 8Gi
+        requests:
+          cpu: "1"
+          memory: 4Gi
+      volumeMounts:
+      - mountPath: /dev/shm
+        name: shared-memory
+      - mountPath: "/mnt/data"
+        name: training-data
+        # readOnly: true
+      - mountPath: "/mnt/output2"
+        name: training-output2
+      - mountPath: "/mnt/output/ncai"
+        name: training-output
+        subPath: ncai
+      - mountPath: "/mnt/checkpoint"
+        name: training-checkpoint
+      - mountPath: "/mnt/vlm-data"
+        name: vlm-data
+      - mountPath: "/mnt/output/pretraining_data"
+        name: training-output
+        subPath: pretraining_data
+      - mountPath: "/mnt/output/pretraining_data_merged"
+        name: training-output
+        subPath: pretraining_data_merged
+  volumes:
+  - name: shared-memory
+    emptyDir:
+      medium: Memory
+  - name: training-data
+    persistentVolumeClaim:
+      claimName: training-data
+  - name: training-output
+    persistentVolumeClaim:
+      claimName: training-output
+  - name: training-output2
+    persistentVolumeClaim:
+      claimName: training-output2
+  - name: training-checkpoint
+    persistentVolumeClaim:
+      claimName: training-checkpoint
+  - name: vlm-data
+    persistentVolumeClaim:
+      claimName: vlm-data

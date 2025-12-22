@@ -1,15 +1,16 @@
 apiVersion: kubeflow.org/v1
 kind: PyTorchJob
 metadata:
-  name: ncai-wbl-vlm-stage1-megatron-558k-job
+  name: ncai-wbl-vlm-stage4-megatron-job
   namespace: p-ncai-etri-wbl
 spec:
   # elastic은 유지하되, 여기서는 자동 학습 시작 안 하므로 단지 파드 생성을 위해 사용
   elasticPolicy:
-    rdzvId: ncai-wbl-vlm-stage1-megatron-558k
+    rdzvId: ncai-wbl-vlm-stage4-megatron
     rdzvBackend: c10d
-    minReplicas: 2
-    maxReplicas: 2
+    minReplicas: 8
+    maxReplicas: 8
+    maxRestarts: 3        # Fault-Tolarance를 최대 3번까지 보겠다는 뜻. 이후에는 전체 노드가 다 꺼짐
   nprocPerNode: "8"
   runPolicy:
     cleanPodPolicy: None
@@ -17,7 +18,7 @@ spec:
       minAvailable: 1
   pytorchReplicaSpecs:
     Worker:
-      replicas: 2
+      replicas: 8
       restartPolicy: OnFailure
       template:
         metadata:
@@ -38,11 +39,19 @@ spec:
                       - key: kubernetes.io/hostname
                         operator: NotIn
                         values:
-                          - h100-i001v8-w-05fe
-                      - key: kubernetes.io/hostname
-                        operator: NotIn
-                        values:
-                          - h100-i001v8-w-016a
+                          - h100-i001v8-w-cfdb
+                          - h100-i001v8-w-860e
+                      # - key: kubernetes.io/hostname
+                      #   operator: In
+                      #   values:
+                      #     - h100-i001v8-w-3a18
+                      #     - h100-i001v8-w-5a03
+                      #     - h100-i001v8-w-a9d4
+                      #     - h100-i001v8-w-8433
+                      #     - h100-i001v8-w-ee11
+                      #     - h100-i001v8-w-6c55
+                      #     - h100-i001v8-w-3917
+                      #     - h100-i001v8-w-d29f
           imagePullSecrets:
             - name: ncai-wbl-registry-secret  # 프로젝트에 해당되는 Image Pull Secret 명
           # 서로 다른 노드로 분산 배치 추천(원하면 주석 해제)
@@ -79,22 +88,22 @@ spec:
               TM=$(date "+%Y-%m-%d_%H:%M:%S")
 
               TRAINING_PATH=/mnt/output/ncai/multi_modal/Megatron-LM
-              MEGATRON_PATH="${TRAINING_PATH%/}megatron"
+              MEGATRON_PATH="${TRAINING_PATH}/megatron"
 
-              DATA_PATH="/mnt/output/ncai/multi_modal/data/LLaVA-558K-Webdataset"
+              DATA_PATH="${TRAINING_PATH}/vlm/stage_4_dataset.yaml"
               TOKENIZER_PATH="${TRAINING_PATH}/tokenizers/wbl_mm_tokenizer_v5"
-              CHECKPOINT_PATH="${TRAINING_PATH}/checkpoints/merged/vlm_20251217__wbl_llm_sft_1206_lr_3e6_seq_16384"
+              CHECKPOINT_PATH="/mnt/checkpoint/ncai/multimodal/outputs/vlm_stage_2/checkpoints/v9_rice_gpt_stage_2_7b_a1b_gbs_128_lr_5e6_img_size_30_s_factor_1_0_no_capacity___v6"
 
               TP=1
               PP=1
-              SEQ_LEN=32768
+              SEQ_LEN=16384
               MBS=1
-              GBS=16
-              NSTEP=2000
-              # NSAMPLES=558128
+              GBS=128    # 128
+              # NSTEP=2000
+              NSAMPLES=18500000    # 20127297
 
-              DEFAULT_OUTPUT_DIR="/mnt/checkpoint/ncai/multimodal/outputs/vlm_stage_1"
-              JOB_NAME="V8_rice_gpt_stage_1_7b_a1b_gbs_${GBS}_no_moe_loss_llava_558k_tk_v5_vit_rotary_emb_win_size__vlm_20251217__wbl_llm_sft_1206_lr_3e6_seq_16384"
+              DEFAULT_OUTPUT_DIR="/mnt/checkpoint/ncai/multimodal/outputs/vlm_stage_4"
+              JOB_NAME="v1_rice_gpt_stage_4_7b_a1b_gbs_${GBS}_lr_3e6_warmup_0_02_18M_tk5_no_capacity__v9__v6"
 
               SAVE_CKPT_PATH="${DEFAULT_OUTPUT_DIR}/checkpoints/${JOB_NAME}"
               TENSORBOARD_PATH="${DEFAULT_OUTPUT_DIR}/tensorboards/${JOB_NAME}"
@@ -129,6 +138,10 @@ spec:
                   --swiglu
                   --untie-embeddings-and-output-weights
                   --no-masked-softmax-fusion
+
+                  # --moe-expert-capacity-factor 1.25
+
+                  --moe-per-layer-logging
               )
 
               # --moe-ffn-hidden-size는 세팅하지 않는다. ffn-hidden-size를 따라감.
@@ -141,8 +154,8 @@ spec:
                   --moe-router-load-balancing-type global_aux_loss
                   --moe-router-topk 5
                   --moe-grouped-gemm
-                  --moe-aux-loss-coeff 0.
-                  --moe-z-loss-coeff 0.
+                  --moe-aux-loss-coeff 1e-2
+                  --moe-z-loss-coeff 1e-3
                   --moe-router-topk-scaling-factor 1.0
                   --moe-router-score-function 'sigmoid'
                   --moe-token-dispatcher-type alltoall
@@ -177,36 +190,37 @@ spec:
                   --data-path "$DATA_PATH"
                   --dataloader-type external
                   --split 100,0,0
-                  --num-workers 16
+                  --num-workers 4
                   --chat-template rice-gpt
               )
 
               TRAINING_ARGS=(
                   --training-phase sft
-                  --trainable-modules vision_projection
+                  --trainable-modules all
                   --micro-batch-size "${MBS}"
                   --global-batch-size "${GBS}"
-                  --lr 1.0e-4
+                  --lr 3.0e-6
                   --min-lr 1.0e-6
+                  --vision-lr-mult 0.5
                   --clip-grad 1.0
-                  --weight-decay 0
+                  --weight-decay 0.01
                   --optimizer adam
                   --adam-beta1 0.9
-                  --adam-beta2 0.99
+                  --adam-beta2 0.95
                   --adam-eps 1e-05
                   --norm-epsilon 1e-6
-                  --train-iters "${NSTEP}"
-                  --lr-decay-iters "${NSTEP}"
-                  # --train-samples "${NSAMPLES}"
-                  # --lr-decay-samples "${NSAMPLES}"
+                  # --train-iters "${NSTEP}"
+                  # --lr-decay-iters "${NSTEP}"
+                  --train-samples "${NSAMPLES}"
+                  --lr-decay-samples "${NSAMPLES}"
                   --lr-decay-style cosine
-                  --lr-warmup-fraction 0.002
+                  --lr-warmup-fraction 0.02
                   --initial-loss-scale 65536
                   --bf16
-                  # --load "$CHECKPOINT_PATH"
+
                   --pretrained-checkpoint "$CHECKPOINT_PATH"
                   --save "$SAVE_CKPT_PATH"
-                  --save-interval 1000
+                  --save-interval 2000
                   --ckpt-format torch_dist
                   --dataloader-save "${SAVE_CKPT_PATH}/dataloader"
                   --exit-on-missing-checkpoint
@@ -216,11 +230,22 @@ spec:
                   --recompute-method uniform
                   --recompute-num-layers 4
 
-                  # --async-save
+                  --async-save
                   --no-load-rng
                   --no-load-optim
 
                   --eval-iters 0
+
+                  --manual-gc
+                  --manual-gc-interval 10
+                  
+                  --no-check-for-nan-in-loss-and-grad
+                  --cross-entropy-loss-fusion
+                  --cross-entropy-fusion-impl 'te'
+
+                  --possible-image-tokens 6000
+
+                  --length-sort-pool-size 0
               )
 
               MODEL_PARALLEL_ARGS=(
@@ -229,7 +254,7 @@ spec:
                   --tensor-model-parallel-size "${TP}"
                   --expert-model-parallel-size 8
                   --context-parallel-size 1
-                  # --sequence-parallel
+                  --sequence-parallel
                   --use-distributed-optimizer
                   --cp-comm-type 'p2p'
                   --distributed-backend nccl
@@ -257,11 +282,10 @@ spec:
                   --log-params-norm
               )
 
-              TM=$(date "+%Y-%m-%d_%H:%M:%S")
               logfile="${SAVE_CKPT_PATH}/run_${TM}_tp${TP}_pp${PP}_seqlen${SEQ_LEN}_mbs${MBS}_gbs${GBS}.log"
 
-              export OFFLINE_PACKED_DATA='1'
-              export OFFLINE_PACKING_VQA='1'
+              # export OFFLINE_PACKED_DATA='1'
+              # export OFFLINE_PACKING_VQA='1'
               export PYTORCH_CUDA_ALLOC_CONF=garbage_collection_threshold:0.72
 
               PYTHONPATH="$TRAINING_PATH:$MEGATRON_PATH" \
@@ -326,12 +350,12 @@ spec:
             # VS Code/디버깅/런데부 등에서 관례적으로 쓰는 포트 노출(포워딩 용도)
             resources:
               limits:
-                memory: "512Gi"
+                memory: "1Ti"
                 cpu: 32
                 nvidia.com/gpu: 8
                 rdma/hca_shared_devices_a: 1
               requests:
-                memory: "512Gi"
+                memory: "1Ti"
                 cpu: 32
                 nvidia.com/gpu: 8
                 rdma/hca_shared_devices_a: 1

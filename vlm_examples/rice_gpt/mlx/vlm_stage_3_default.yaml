@@ -1,12 +1,12 @@
 apiVersion: kubeflow.org/v1
 kind: PyTorchJob
 metadata:
-  name: ncai-wbl-vlm-stage2-megatron-job
+  name: ncai-wbl-vlm-stage3-megatron-job
   namespace: p-ncai-etri-wbl
 spec:
   # elastic은 유지하되, 여기서는 자동 학습 시작 안 하므로 단지 파드 생성을 위해 사용
   elasticPolicy:
-    rdzvId: ncai-wbl-vlm-stage2-megatron
+    rdzvId: ncai-wbl-vlm-stage3-megatron
     rdzvBackend: c10d
     minReplicas: 8
     maxReplicas: 8
@@ -38,7 +38,20 @@ spec:
                       - key: kubernetes.io/hostname
                         operator: NotIn
                         values:
-                          - h100-i001v8-w-cfdb
+                          - h100-i001v8-w-860e
+                          - h100-i001v8-w-4f85
+                          - h100-i001v8-w-7af3
+                      # - key: kubernetes.io/hostname
+                      #   operator: In
+                      #   values:
+                      #     - h100-i001v8-w-3a18
+                      #     - h100-i001v8-w-5a03
+                      #     - h100-i001v8-w-a9d4
+                      #     - h100-i001v8-w-8433
+                      #     - h100-i001v8-w-ee11
+                      #     - h100-i001v8-w-6c55
+                      #     - h100-i001v8-w-3917
+                      #     - h100-i001v8-w-d29f
           imagePullSecrets:
             - name: ncai-wbl-registry-secret  # 프로젝트에 해당되는 Image Pull Secret 명
           # 서로 다른 노드로 분산 배치 추천(원하면 주석 해제)
@@ -75,11 +88,11 @@ spec:
               TM=$(date "+%Y-%m-%d_%H:%M:%S")
 
               TRAINING_PATH=/mnt/output/ncai/multi_modal/Megatron-LM
-              MEGATRON_PATH="${TRAINING_PATH%/}megatron"
+              MEGATRON_PATH="${TRAINING_PATH}/megatron"
 
               DATA_PATH="${TRAINING_PATH}/vlm/stage_3_dataset.yaml"
-              TOKENIZER_PATH="${TRAINING_PATH}/tokenizers/wbl_mm_tokenizer_v3"
-              CHECKPOINT_PATH="/mnt/output/ncai/multi_modal/outputs/vlm_stage_2/checkpoints/v5_rice_gpt_stage_2_7b_a1b_gbs_128_vv_finevision_img_size_30_s_factor_1_0__v2"
+              TOKENIZER_PATH="${TRAINING_PATH}/tokenizers/wbl_mm_tokenizer_v6"
+              CHECKPOINT_PATH="/mnt/checkpoint/ncai/multimodal/outputs/vlm_stage_2/checkpoints/v10_rice_gpt_stage_2_7b_a1b_gbs_128_only_vv_data_lr_5e5_img_size_30_s_factor_1_0_no_capacity_4d_attn_mask_use_pad_token___v6"
 
               TP=1
               PP=1
@@ -87,10 +100,10 @@ spec:
               MBS=1
               GBS=128
               # NSTEP=2000
-              NSAMPLES=18900000    # 20127297
+              NSAMPLES=3900000     # 3908684
 
-              DEFAULT_OUTPUT_DIR="/mnt/output/ncai/multi_modal/outputs/vlm_stage_3"
-              JOB_NAME="v1_rice_gpt_stage_3_7b_a1b_gbs_128__v5__v2"
+              DEFAULT_OUTPUT_DIR="/mnt/checkpoint/ncai/multimodal/outputs/vlm_stage_3"
+              JOB_NAME="v5_rice_gpt_stage_3_7b_a1b_gbs_${GBS}_lr_3e6_warmup_0_02_finevision_4M_tk6_no_capacity__v10__v6"
 
               SAVE_CKPT_PATH="${DEFAULT_OUTPUT_DIR}/checkpoints/${JOB_NAME}"
               TENSORBOARD_PATH="${DEFAULT_OUTPUT_DIR}/tensorboards/${JOB_NAME}"
@@ -137,7 +150,7 @@ spec:
                   --moe-router-load-balancing-type global_aux_loss
                   --moe-router-topk 5
                   --moe-grouped-gemm
-                  --moe-aux-loss-coeff 2e-2
+                  --moe-aux-loss-coeff 1e-2   # 2e-2
                   --moe-z-loss-coeff 1e-3
                   --moe-router-topk-scaling-factor 1.0
                   --moe-router-score-function 'sigmoid'
@@ -146,6 +159,10 @@ spec:
                   --moe-router-dtype fp32
                   --overlap-param-gather
                   --overlap-grad-reduce
+
+                  --moe-per-layer-logging
+                  #--moe-pad-expert-input-to-capacity   # OOM 이 발생한다면 끄자
+                  # --moe-input-jitter-eps 1e-3
               )
 
               # YaRN을 사용하지 않으므로 mscale을 넣지 않는다.
@@ -182,9 +199,9 @@ spec:
                   --trainable-modules all
                   --micro-batch-size "${MBS}"
                   --global-batch-size "${GBS}"
-                  --lr 1.0e-5
+                  --lr 3.0e-6
                   --min-lr 1.0e-6
-                  --vision-lr-mult 0.2
+                  --vision-lr-mult 0.5
                   --clip-grad 1.0
                   --weight-decay 0.01
                   --optimizer adam
@@ -197,20 +214,22 @@ spec:
                   --train-samples "${NSAMPLES}"
                   --lr-decay-samples "${NSAMPLES}"
                   --lr-decay-style cosine
-                  --lr-warmup-fraction 0.002
+                  --lr-warmup-fraction 0.02
                   --initial-loss-scale 65536
                   --bf16
                   --pretrained-checkpoint "$CHECKPOINT_PATH"
                   --save "$SAVE_CKPT_PATH"
-                  --save-interval 1000
+                  --save-interval 2000
                   --ckpt-format torch_dist
+                  --dataloader-save "${SAVE_CKPT_PATH}/dataloader"
+                  --exit-on-missing-checkpoint
 
                   --ckpt-fully-parallel-load
                   --recompute-granularity full
                   --recompute-method uniform
                   --recompute-num-layers 4
 
-                  # --async-save
+                  --async-save
                   --no-load-rng
                   --no-load-optim
 
@@ -218,14 +237,15 @@ spec:
 
                   --manual-gc
                   --manual-gc-interval 10
-                  
-                  --no-check-for-nan-in-loss-and-grad
+
+                  # --no-check-for-nan-in-loss-and-grad
                   # --cross-entropy-loss-fusion
                   # --cross-entropy-fusion-impl 'te'
 
-                  --possible-image-tokens 10000
+                  --possible-image-tokens 6000
 
-                  --length-sort-pool-size 400
+                  --sft
+                  --finetune
               )
 
               MODEL_PARALLEL_ARGS=(
@@ -237,7 +257,7 @@ spec:
                   # --sequence-parallel
                   --use-distributed-optimizer
                   --cp-comm-type 'p2p'
-                  --distributed-backend nccl
+                  # --distributed-backend nccl
               )
 
               # FP8_ARGS=(
@@ -347,6 +367,8 @@ spec:
               readOnly: true
             - mountPath: "/mnt/output2"
               name: training-output2
+            - mountPath: "/mnt/checkpoint"
+              name: training-checkpoint
             - mountPath: "/mnt/output/ncai"
               name: training-output
               subPath: ncai
