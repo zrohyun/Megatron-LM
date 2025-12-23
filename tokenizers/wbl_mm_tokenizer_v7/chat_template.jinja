@@ -1,0 +1,132 @@
+{%- set image_count = namespace(value=0) %}
+{%- set video_count = namespace(value=0) %}
+
+{%- if tools %}
+    {%- if messages[0].role == 'system' %}
+        {{- '<|role_start|>system<|role_end|>\n' + messages[0].content + '\n' }}
+    {%- endif %}
+    {{- "## Tools ##\n\nYou can call one or more available functions to help with the user’s query.\n\nEach function is wrapped in <tool_start> and <tool_end> tags inside the <tools></tools> block:\n<tools>" }}
+    {%- for tool in tools %}
+        {{- "\n<tool_start>\n" }}
+        {{- tool | tojson }}
+        {{- "\n<tool_end>" }}
+    {%- endfor %}
+    {{- "\n</tools>\n\nEach time a function is called, return a JSON object specifying the function name and arguments, enclosed within <tool_call></tool_call> tags:\n<tool_call>\n{\"name\": <function-name>, \"arguments\": <args-json-object>}\n</tool_call>\n" }}
+{%- else %}
+    {%- if messages[0].role == 'system' %}
+        {{- '<|role_start|>system<|role_end|>\n' + messages[0].content + '\n' }}
+    {%- endif %}
+{%- endif %}
+
+{%- set ns = namespace(multi_step_tool=true, last_query_index=messages|length - 1) %}
+{%- for message in messages[::-1] %}
+    {%- set index = (messages|length - 1) - loop.index0 %}
+    {%- if ns.multi_step_tool and message.role == "user" and message.content is string and not (message.content.startswith('<tool_response>') and message.content.endswith('</tool_response>')) %}
+        {%- set ns.multi_step_tool = false %}
+        {%- set ns.last_query_index = index %}
+    {%- endif %}
+{%- endfor %}
+
+{%- for message in messages %}
+    {%- set ns_c = namespace(text='') %}
+    {%- if message.content is string %}
+        {%- set ns_c.text = message.content %}
+    {%- else %}
+        {%- for part in message.content %}
+            {%- if part['type'] == 'image' or 'image' in part or 'image_url' in part %}
+                {%- set image_count.value = image_count.value + 1 %}
+                {%- if add_vision_id %}
+                    {%- set ns_c.text = ns_c.text ~ 'Picture ' ~ image_count.value ~ ':\n' %}
+                {%- endif %}
+                {%- set ns_c.text = ns_c.text ~ '<|vision_start|><|image_pad|><|vision_end|>' %}
+            {%- elif part['type'] == 'video' or 'video' in part %}
+                {%- set video_count.value = video_count.value + 1 %}
+                {%- if add_vision_id %}
+                    {%- set ns_c.text = ns_c.text ~ 'Video ' ~ video_count.value ~ ':\n' %}
+                {%- endif %}
+                {%- set ns_c.text = ns_c.text ~ '<|vision_start|><|video_pad|><|vision_end|>' %}
+            {%- elif 'text' in part %}
+                {%- set ns_c.text = ns_c.text ~ part['text'] %}
+            {%- endif %}
+        {%- endfor %}
+    {%- endif %}
+    {%- set content = ns_c.text %}
+
+    {%- if (message.role == "user") or (message.role == "system" and not loop.first) %}
+        {{- '<|role_start|>' + message.role + '<|role_end|>\n' + content + '' + '\n' }}
+
+    {%- elif message.role == "assistant" %}
+        {%- set reasoning_content = '' %}
+        {%- if message.reasoning_content is string %}
+            {%- set reasoning_content = message.reasoning_content %}
+        {%- else %}
+            {%- if '</think>' in content %}
+                {%- set reasoning_content = content.split('</think>')[0].rstrip('\n').split('<think>')[-1].lstrip('\n') %}
+                {%- set content = content.split('</think>')[-1].lstrip('\n') %}
+            {%- endif %}
+        {%- endif %}
+
+        {%- if loop.last and not add_generation_prompt and not message.tool_calls %}
+            {%- if loop.index0 > ns.last_query_index and reasoning_content|length > 0 %}
+                {%- if loop.last or (not loop.last and reasoning_content) %}
+                    {{- '<|role_start|>' + message.role + '<|role_end|>\n\n<think>\n' + reasoning_content.strip('\n') + '\n</think>\n\n' + content.lstrip('\n')+ '<|END|>' }}
+                {%- else %}
+                    {{- '<|role_start|>' + message.role + '<|role_end|>\n' + content + '<|END|>' }}
+                {%- endif %}
+            {%- else %}
+                {{- '<|role_start|>' + message.role + '<|role_end|>\n' + content + '<|END|>' }}
+            {%- endif %}
+        {%- else %}
+            {%- if loop.index0 > ns.last_query_index and reasoning_content|length > 0 %}
+                {%- if loop.last or (not loop.last and reasoning_content) %}
+                    {{- '<|role_start|>' + message.role + '<|role_end|>\n\n<think>\n' + reasoning_content.strip('\n') + '\n</think>\n\n' + content.lstrip('\n') }}
+                {%- else %}
+                    {{- '<|role_start|>' + message.role + '<|role_end|>\n' + content }}
+                {%- endif %}
+            {%- else %}
+                {{- '<|role_start|>' + message.role + '<|role_end|>\n' + content }}
+            {%- endif %}
+        {%- endif %}
+        {%- if message.tool_calls %}
+            {%- for tool_call in message.tool_calls %}
+                {%- if (loop.first and content) or (not loop.first) %}
+                    {{- '\n' }}
+                {%- endif %}
+                {%- if tool_call.function %}
+                    {%- set tool_call = tool_call.function %}
+                {%- endif %}
+                {{- '<tool_call>\n{"name": "' }}
+                {{- tool_call.name }}
+                {{- '", "arguments": ' }}
+                {%- if tool_call.arguments is string %}
+                    {{- tool_call.arguments }}
+                {%- else %}
+                    {{- tool_call.arguments | tojson }}
+                {%- endif %}
+                {{- '}\n</tool_call>' }}
+            {%- endfor %}
+            {%- if loop.last and not add_generation_prompt %}
+                {{- '<|END|>' }}
+            {%- endif %}
+        {%- endif %}
+        {{- '\n' }}
+    {%- elif message.role == "tool" %}
+        {%- if loop.first or (messages[loop.index0 - 1].role != "tool") %}
+            {{- '<|role_start|>user<|role_end|>\n<tool_response>\n' }}
+        {%- else %}
+            {{- '\n<tool_response>\n' }}
+        {%- endif %}
+        {{- content }}
+        {{- '\n</tool_response>' }}
+        {%- if loop.last or (messages[loop.index0 + 1].role != "tool") %}
+            {{- '\n' }}
+        {%- endif %}
+    {%- endif %}
+{%- endfor %}
+{%- if add_generation_prompt %}
+    {%- if tools %}
+        {{- '<|role_start|>assistant<|role_end|>\n\n<think>\n\n</think>\n\n' }}
+    {%- else %}
+        {{- '<|role_start|>assistant<|role_end|>\n\n<think>\n' }}
+    {%- endif %}
+{%- endif %}
