@@ -149,6 +149,9 @@ def generate_generic_thinking_prompt(input_type: str = "multimodal"):
 
     # 문장 구조 3: Self-Talk style
     sentence_c = f"Analyzing {random.choice(targets)}... {random.choice(goals)}"
+    
+    if random.randint(0, 9) < 1:
+        return random.choice(["...", "Hmm, ...", " "])
 
     return random.choice([sentence_a, sentence_b, sentence_c])
 
@@ -615,6 +618,8 @@ class Qwen2VLTaskEncoder(TaskEncoder):
         assistant_token_ids = self.processor.tokenizer(
             "assistant", add_special_tokens=False
         )["input_ids"]  # [710, 9370]
+        
+        think_open_id, think_close_id = self.processor.tokenizer.convert_tokens_to_ids(["<think>", "</think>"])
                 
         i = 0
         while i < L:
@@ -628,9 +633,16 @@ class Qwen2VLTaskEncoder(TaskEncoder):
                 ):
                     # header 구간: <|role_start|> assistant <|role_end|>
                     header_end = j + len(assistant_token_ids) + 1
+                    
+                    k = header_end
+                    if self.use_think_template:
+                        while k < L and tokens[k] != think_close_id:
+                            k += 1
+                            
+                        k += 2  # </think>\n\n 포함
+                        header_end = k 
 
                     # 답변 끝 위치: 다음 role_start 또는 시퀀스 끝
-                    k = header_end
                     while k < L and tokens[k] != role_start_id:
                         k += 1
 
