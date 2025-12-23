@@ -1,6 +1,7 @@
 """ Qwen2VLTaskEncoder class."""
 import math
 import re
+import random
 from dataclasses import dataclass, field, asdict
 from typing import List, Dict, Tuple, Union, Optional, Any, Callable, TypeVar
 
@@ -67,6 +68,89 @@ VIDEO_TOKEN_WITH_TAGS = VISION_TAGS[0] + VIDEO_TOKEN + VISION_TAGS[1]
 
 SYSTEM_PROMPT = "You are a helpful assistant."
 
+
+def generate_generic_thinking_prompt(input_type: str = "multimodal"):
+    """
+    input_type: "multimodal" | "text" | "common"
+    """
+    assert input_type in ("multimodal", "text", "common")
+
+    # 1. 도입부 (Starters)
+    starters = [
+        "First,", "Okay,", "Well,", "To begin with,", "Starting off,",
+        "Let's see,", "Let me see,", "Basically,", "Process:", "Thought:"
+    ]
+
+    # 2. 행동 (Actions)
+    common_actions = [
+        "I will carefully analyze", "I need to examine", "I'll break down",
+        "let's review", "checking", "investigating"
+    ]
+
+    visual_actions = [
+        "I need to scan", "let's inspect", "I am looking at", "let's observe"
+    ]
+
+    text_actions = [
+        "I will read", "I need to parse", "I'll interpret", "let's analyze"
+    ]
+
+    # 3. 대상 (Targets)
+    visual_targets = [
+        "the provided image", "this visual input", "the picture context",
+        "the pixel data", "the image content", "the visual details",
+        "what is shown here", "the overall scene", "the visible elements",
+        "the image"
+    ]
+
+    text_targets = [
+        "the given text", "the user's question", "the input prompt",
+        "the textual content", "the sentence", "the provided description",
+        "the written information", "the query"
+    ]
+
+    common_targets = [
+        "the input", "the problem", "the task",
+        "the given information", "the context",
+        "the request", "what is provided"
+    ]
+
+    # 4. 목표 (Goals)
+    goals = [
+        "to find the correct answer.", "to derive a proper response.",
+        "to understand the intent.", "to capture the key information.",
+        "to answer the user's question.", "to address the query.",
+        "to form a conclusion.", "to determine the result."
+    ]
+
+    # --- modality 선택 ---
+    if input_type == "text":
+        actions = common_actions + text_actions
+        targets = text_targets
+
+    elif input_type == "common":
+        actions = common_actions
+        targets = common_targets
+
+    else:  # multimodal (default)
+        actions = common_actions + visual_actions
+        targets = visual_targets
+
+    # 문장 구조 1: Full Sentence
+    sentence_a = (
+        f"{random.choice(starters)} "
+        f"{random.choice(actions)} "
+        f"{random.choice(targets)} "
+        f"{random.choice(goals)}"
+    )
+
+    # 문장 구조 2: Short & Direct
+    sentence_b = f"{random.choice(actions).capitalize()} {random.choice(targets)}."
+
+    # 문장 구조 3: Self-Talk style
+    sentence_c = f"Analyzing {random.choice(targets)}... {random.choice(goals)}"
+
+    return random.choice([sentence_a, sentence_b, sentence_c])
 
 
 def get_stateless(fn: Callable[..., T_sample]) -> bool:
@@ -148,6 +232,8 @@ class Qwen2VLTaskEncoder(TaskEncoder):
         # image
         self.min_pixels = args.min_pixels
         self.max_pixels = args.max_pixels
+        
+        self.use_think_template = getattr(args, "use_think_template", False)
 
     def _reisize_video(self, vision: VideoData, image_factor=28, frame_factor=2):
         """ Resize video: frame number, height, width """
@@ -422,6 +508,19 @@ class Qwen2VLTaskEncoder(TaskEncoder):
             messages = [{"role": "system", "content": SYSTEM_PROMPT}] + messages
         else:
             raise ValueError("First message must be system or user role.")
+        
+        if self.use_think_template:
+            for m_idx, m in enumerate(messages):
+                if m['role'] == "assistant" and "<think>" not in m['content']:
+                    if m_idx > 1 and messages[m_idx - 1]['role'] == "user":
+                        if "<image>" in messages[m_idx - 1]['content']:
+                            input_type = "multimodal"
+                        else:
+                            input_type = "text"
+                    else:
+                        input_type = "common"
+                    
+                    m['content'] = f"<think>{generate_generic_thinking_prompt(input_type)}</think>" + m['content']
 
         chat_text = self.processor.apply_chat_template(
             messages,

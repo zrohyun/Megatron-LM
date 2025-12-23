@@ -189,6 +189,11 @@ def _add_extra_sft_args(parser: argparse.ArgumentParser):
                        choices=get_support_templates(),
                        default=None,
                        help='The template to apply to instruction data.')
+    
+    group.add_argument('--use-think-template',
+                       action="store_true",
+                       default=False,
+                       help='Use <think> template on chat-teamplte for reasoning process.')
 
     group.add_argument('--sft-dataset-config',
                        type=str,
