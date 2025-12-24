@@ -36,7 +36,7 @@
     "single_word": false
   },
   "pad_token": {
-    "content": "<pad>",
+    "content": "<|END|>",
     "lstrip": false,
     "normalized": false,
     "rstrip": false,
