@@ -3,7 +3,7 @@
 
 {%- if tools %}
     {%- if messages[0].role == 'system' %}
-        {{- '<|role_start|>system<|role_end|>\n' + messages[0].content + '\n'}}
+        {{- '<|role_start|>system<|role_end|>\n' + messages[0].content + '\n' }}
     {%- endif %}
     {{- "## Tools ##\n\nYou can call one or more available functions to help with the user’s query.\n\nEach function is wrapped in <tool_start> and <tool_end> tags inside the <tools></tools> block:\n<tools>" }}
     {%- for tool in tools %}
@@ -17,15 +17,6 @@
         {{- '<|role_start|>system<|role_end|>\n' + messages[0].content + '\n' }}
     {%- endif %}
 {%- endif %}
-
-{%- set ns = namespace(multi_step_tool=true, last_query_index=messages|length - 1) %}
-{%- for message in messages[::-1] %}
-    {%- set index = (messages|length - 1) - loop.index0 %}
-    {%- if ns.multi_step_tool and message.role == "user" and message.content is string and not(message.content.startswith('<tool_response>') and message.content.endswith('</tool_response>')) %}
-        {%- set ns.multi_step_tool = false %}
-        {%- set ns.last_query_index = index %}
-    {%- endif %}
-{%- endfor %}
 
 {%- for message in messages %}
     {%- set ns_c = namespace(text='') %}
@@ -54,6 +45,7 @@
 
     {%- if (message.role == "user") or (message.role == "system" and not loop.first) %}
         {{- '<|role_start|>' + message.role + '<|role_end|>\n' + content + '' + '\n' }}
+
     {%- elif message.role == "assistant" %}
         {%- if loop.last and not add_generation_prompt and not message.tool_calls %}
             {{- '<|role_start|>' + message.role + '<|role_end|>\n' + content + '<|END|>' }}
@@ -78,9 +70,6 @@
                 {%- endif %}
                 {{- '}\n</tool_call>' }}
             {%- endfor %}
-            {%- if loop.last and not add_generation_prompt %}
-                {{- '<|END|>' }}
-            {%- endif %}
         {%- endif %}
         {{- '\n' }}
     {%- elif message.role == "tool" %}
