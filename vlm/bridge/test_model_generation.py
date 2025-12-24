@@ -65,9 +65,9 @@ inputs = processor(
     return_tensors="pt",
 )
 
-print(inputs.keys())
+# print(inputs.keys())
 inputs = inputs.to("cuda")
-print(processor.batch_decode(inputs.input_ids[0]))
+# print(processor.batch_decode(inputs.input_ids[0]))
 
 # Inference: Generation of the output
 generated_ids = model.generate(**inputs, max_new_tokens=256)
@@ -79,4 +79,11 @@ generated_ids_trimmed = [
 output_text = processor.batch_decode(
     generated_ids_trimmed, skip_special_tokens=True, clean_up_tokenization_spaces=False
 )
-print(output_text)
+
+# 결과 출력 (webhook에서 파싱할 수 있도록 마커 사용)
+print("===MODEL_OUTPUT_START===")
+for i, text in enumerate(output_text):
+    print(f"[Response {i+1}]: {text}")
+print("===MODEL_OUTPUT_END===")
+print(f"Model: {model_path}")
+print(f"Test completed successfully!")

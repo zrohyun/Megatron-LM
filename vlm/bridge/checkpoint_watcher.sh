@@ -122,13 +122,68 @@ run_model_test() {
     log "Testing converted model: $output_path"
     cd "$MEGATRON_ROOT"
     
-    if MODEL_PATH="$output_path" python vlm/bridge/test_model_generation.py; then
+    # 테스트 출력 캡처
+    local test_output
+    local test_exit_code
+    test_output=$(MODEL_PATH="$output_path" python vlm/bridge/test_model_generation.py 2>&1)
+    test_exit_code=$?
+    
+    # 출력 로그에 기록
+    echo "$test_output"
+    
+    # MODEL_OUTPUT 마커 사이의 내용 추출
+    local model_response
+    model_response=$(echo "$test_output" | sed -n '/===MODEL_OUTPUT_START===/,/===MODEL_OUTPUT_END===/p' | grep -v '===MODEL_OUTPUT' | head -5)
+    
+    if [[ $test_exit_code -eq 0 ]]; then
         log "✅ Model test passed: $output_path"
-        send_webhook "$train_name" "$iteration" "$input_path" "$output_path" "success"
+        send_webhook_with_output "$train_name" "$iteration" "$input_path" "$output_path" "success" "$model_response"
     else
         log "⚠️ Model test failed: $output_path (conversion was successful)"
-        send_webhook "$train_name" "$iteration" "$input_path" "$output_path" "test_failed"
+        send_webhook_with_output "$train_name" "$iteration" "$input_path" "$output_path" "test_failed" "$model_response"
     fi
+}
+
+# Webhook 알림 전송 (테스트 출력 포함)
+send_webhook_with_output() {
+    local train_name="$1"
+    local iteration="$2"
+    local input_path="$3"
+    local output_path="$4"
+    local status="$5"
+    local model_output="$6"
+    
+    if [[ "$SEND_WEBHOOK" != "true" ]]; then
+        return 0
+    fi
+    
+    local emoji="✅"
+    local status_text="변환 및 테스트 완료"
+    if [[ "$status" == "test_failed" ]]; then
+        emoji="⚠️"
+        status_text="변환 완료 (테스트 실패)"
+    elif [[ "$status" == "failed" ]]; then
+        emoji="❌"
+        status_text="변환 실패"
+    fi
+    
+    local timestamp=$(date '+%Y-%m-%d %H:%M:%S')
+    
+    # 모델 출력 이스케이프 (JSON 안전하게)
+    local escaped_output
+    escaped_output=$(echo "$model_output" | sed 's/\\/\\\\/g; s/"/\\"/g; s/\n/\\n/g' | tr '\n' ' ' | head -c 500)
+    
+    local payload=$(cat <<EOF
+{
+  "text": "${emoji} **Checkpoint ${status_text}**\n\n- **학습명**: ${train_name}\n- **Iteration**: ${iteration}\n- **입력 경로**: ${input_path}\n- **출력 경로**: ${output_path}\n- **시간**: ${timestamp}\n\n**🤖 모델 출력:**\n\`\`\`\n${escaped_output}\n\`\`\`"
+}
+EOF
+)
+    
+    curl -sS -X POST \
+        -H "Content-Type: application/json" \
+        -d "$payload" \
+        "$WEBHOOK_URL" || log "WARNING: Failed to send webhook notification"
 }
 
 # 폴더 생성시간 가져오기 (크로스 플랫폼)
