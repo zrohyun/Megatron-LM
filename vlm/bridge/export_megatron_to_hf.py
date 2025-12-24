@@ -5,18 +5,6 @@ import sys
 from pathlib import Path
 import pdb
 
-# 커스텀 HF 모델 등록을 위해 modeling 파일 import
-# WBLVLMoE-A1B-HF-Dummy 경로를 sys.path에 추가
-SCRIPT_DIR = Path(__file__).parent
-sys.path.insert(0, str(SCRIPT_DIR / "WBLVLMoE-A1B-HF-Dummy"))
-
-# 이 import가 실행되면 AutoModelForCausalLM.register가 호출됨
-from modeling_wbl_vl_moe import WBLVLMoEForCausalLM, WBLVLMoEConfig
-import transformers
-# transformers 모듈에 직접 등록
-transformers.WBLVLMoEForCausalLM = WBLVLMoEForCausalLM
-transformers.WBLVLMoEConfig = WBLVLMoEConfig
-
 from megatron.core import parallel_state
 from megatron.core.enums import ModelType
 
