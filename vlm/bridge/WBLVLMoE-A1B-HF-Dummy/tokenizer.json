@@ -20042,7 +20042,7 @@
       {
         "type": "Metaspace",
         "replacement": "▁",
-        "prepend_scheme": "always",
+        "prepend_scheme": "never",
         "split": false
       },
       {
@@ -20076,12 +20076,6 @@
       },
       {
         "type": "Fuse"
-      },
-      {
-        "type": "Strip",
-        "content": " ",
-        "start": 1,
-        "stop": 0
       }
     ]
   },

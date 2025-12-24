@@ -34,41 +34,40 @@ messages = [
                 "type": "image",
                 "image": "test_images/mario.jpg",
             },
+            {
+                "type": "image",
+                "image": "test_images/mario.jpg",
+            },
             # {"type": "text", "text": "Charlotte Perriand (24 October 1903 - 27 October 1999) was"},
+            # {"type": "text", "text": "Hey, are you conscious? Can you talk to me?"},
+            {"type": "text", "text": "Describe the image"},
             # {"type": "text", "text": "Hey, are you conscious? Can you talk to me?"},
             {"type": "text", "text": "Describe the image"},
         ],
     }
 ]
 
-# prompt = "Charlotte Perriand (24 October 1903 - 27 October 1999) was"
-# inputs = processor.tokenizer(prompt, padding=True, return_tensors="pt")["input_ids"].to(model.device)
-
-# generate_ids = lm_model.generate(inputs, max_new_tokens=100)
-
-# print(processor.batch_decode(generate_ids[0]))
-
 # Preparation for inference
 text = processor.apply_chat_template(
     messages, tokenize=False, add_generation_prompt=True
 )
 system = "<|role_start|>system<|role_end|>\nYou are a helpful assistant\n"
+
 image_inputs, video_inputs = process_vision_info(messages)
 inputs = processor(
-    text=[system + text],
-    # text=[text],
+    # text=[system + text],
+    text=[text],
     images=image_inputs,
     videos=video_inputs,
-    # padding=True,
     return_tensors="pt",
 )
+
 print(inputs.keys())
 inputs = inputs.to("cuda")
-input_ids = inputs["input_ids"]
-
-print(processor.batch_decode(input_ids[0]))
+print(processor.batch_decode(inputs.input_ids[0]))
 
 # Inference: Generation of the output
+generated_ids = model.generate(**inputs, max_new_tokens=256)
 generated_ids = model.generate(**inputs, max_new_tokens=256)
 
 generated_ids_trimmed = [
