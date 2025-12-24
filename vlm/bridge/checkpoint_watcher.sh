@@ -81,7 +81,7 @@ convert_checkpoint() {
     # 환경변수 설정
     export MCORE_PATH="$input_path"
     export CUDA_DEVICE_MAX_CONNECTIONS=1
-    export CUDA_VISIBLE_DEVICES=""
+    export CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:-0}"
     export RANK=0
     export LOCAL_RANK=0
     export WORLD_SIZE=1
