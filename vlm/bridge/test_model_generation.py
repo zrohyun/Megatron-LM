@@ -7,7 +7,10 @@ import os
 
 
 ####### TESTING GENERATION
-model_path = "/data/ISTD_VOL01/multimodalmodel_team/data/checkpoint/WBLVLMoE-A1B-Stage2-HF"
+# 환경변수로 model_path를 받음, 없으면 기본값 사용
+model_path = os.environ.get("MODEL_PATH", "/data/ISTD_VOL01/multimodalmodel_team/data/checkpoint/WBLVLMoE-A1B-Stage2-HF")
+test_image = os.environ.get("TEST_IMAGE", "test_images/mario.jpg")
+print(f"Using model: {model_path}")
 
 model = AutoModelForCausalLM.from_pretrained(
     model_path,
@@ -32,11 +35,11 @@ messages = [
         "content": [
             {
                 "type": "image",
-                "image": "test_images/mario.jpg",
+                "image": test_image,
             },
             {
                 "type": "image",
-                "image": "test_images/mario.jpg",
+                "image": test_image,
             },
             # {"type": "text", "text": "Charlotte Perriand (24 October 1903 - 27 October 1999) was"},
             # {"type": "text", "text": "Hey, are you conscious? Can you talk to me?"},

@@ -101,12 +101,33 @@ convert_checkpoint() {
         --hf-path "$output_path"; then
         
         log "Successfully converted: $output_path"
-        send_webhook "$train_name" "$iteration" "$input_path" "$output_path" "success"
+        
+        # 변환된 모델 테스트 실행
+        run_model_test "$output_path" "$train_name" "$iteration" "$input_path"
         return 0
     else
         log "ERROR: Failed to convert $input_path"
         send_webhook "$train_name" "$iteration" "$input_path" "$output_path" "failed"
         return 1
+    fi
+}
+
+# 모델 테스트 함수
+run_model_test() {
+    local output_path="$1"
+    local train_name="$2"
+    local iteration="$3"
+    local input_path="$4"
+    
+    log "Testing converted model: $output_path"
+    cd "$MEGATRON_ROOT"
+    
+    if MODEL_PATH="$output_path" python vlm/bridge/test_model_generation.py; then
+        log "✅ Model test passed: $output_path"
+        send_webhook "$train_name" "$iteration" "$input_path" "$output_path" "success"
+    else
+        log "⚠️ Model test failed: $output_path (conversion was successful)"
+        send_webhook "$train_name" "$iteration" "$input_path" "$output_path" "test_failed"
     fi
 }
 
@@ -208,7 +229,19 @@ manual_convert() {
         exit 1
     fi
     
-    convert_checkpoint "$input_path"
+    local output_path="${input_path}-HF"
+    local iteration=$(basename "$input_path")
+    local train_name=$(basename "$(dirname "$input_path")")
+    
+    # -HF 폴더가 이미 있으면 변환 스킵, 테스트만 실행
+    if [[ -d "$output_path" ]]; then
+        log "HF model already exists: $output_path"
+        log "Skipping conversion, running test only..."
+        run_model_test "$output_path" "$train_name" "$iteration" "$input_path"
+    else
+        log "Converting: $input_path → $output_path"
+        convert_checkpoint "$input_path"
+    fi
 }
 
 # 인자 파싱
