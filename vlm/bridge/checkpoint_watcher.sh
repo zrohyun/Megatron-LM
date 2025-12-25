@@ -6,7 +6,7 @@ set -e
 # ========== 환경변수 기본값 ==========
 MCORE_BASE_PATH="${MCORE_BASE_PATH:-/mnt/checkpoint/ncai/multimodal/outputs}"
 CUTOFF_TIMESTAMP="${CUTOFF_TIMESTAMP:-0}"  # 이 시점 이후에 생성된 것만 변환
-STAGES="${STAGES:-vlm_stage_1 vlm_stage_2 vlm_stage_3 vlm_stage_4}"
+STAGES="${STAGES:-vlm_stage_3 vlm_stage_4}" # vlm_stage_1 vlm_stage_2 
 DRY_RUN="${DRY_RUN:-false}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 MEGATRON_ROOT="${MEGATRON_ROOT:-$(cd "${SCRIPT_DIR}/../.." && pwd)}"
@@ -239,7 +239,7 @@ main() {
                 # 1. 이미 변환된 경우 스킵
                 if [[ -d "$hf_dir" ]]; then
                     log "Skipping (already converted): $ckpt_dir"
-                    ((skipped_count++))
+                    ((skipped_count++)) || true
                     continue
                 fi
                 
@@ -248,15 +248,15 @@ main() {
                 
                 if [[ $dir_mtime -lt $CUTOFF_TIMESTAMP ]]; then
                     log "Skipping (older than cutoff): $ckpt_dir (mtime: $dir_mtime)"
-                    ((skipped_count++))
+                    ((skipped_count++)) || true
                     continue
                 fi
                 
                 # 3. 변환 실행
                 if convert_checkpoint "$ckpt_dir"; then
-                    ((converted_count++))
+                    ((converted_count++)) || true
                 else
-                    ((failed_count++))
+                    ((failed_count++)) || true
                 fi
             done
         done
