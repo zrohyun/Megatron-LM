@@ -122,10 +122,13 @@ run_model_test() {
     log "Testing converted model: $output_path"
     cd "$MEGATRON_ROOT"
     
+    # 테스트 이미지 경로
+    local test_image="${TEST_IMAGE:-test_images/mario.jpg}"
+    
     # 테스트 출력 캡처
     local test_output
     local test_exit_code
-    test_output=$(MODEL_PATH="$output_path" python vlm/bridge/test_model_generation.py 2>&1)
+    test_output=$(MODEL_PATH="$output_path" TEST_IMAGE="$test_image" python vlm/bridge/test_model_generation.py 2>&1)
     test_exit_code=$?
     
     # 출력 로그에 기록
@@ -137,10 +140,10 @@ run_model_test() {
     
     if [[ $test_exit_code -eq 0 ]]; then
         log "✅ Model test passed: $output_path"
-        send_webhook_with_output "$train_name" "$iteration" "$input_path" "$output_path" "success" "$model_response"
+        send_webhook_with_output "$train_name" "$iteration" "$input_path" "$output_path" "success" "$model_response" "$test_image"
     else
         log "⚠️ Model test failed: $output_path (conversion was successful)"
-        send_webhook_with_output "$train_name" "$iteration" "$input_path" "$output_path" "test_failed" "$model_response"
+        send_webhook_with_output "$train_name" "$iteration" "$input_path" "$output_path" "test_failed" "$model_response" "$test_image"
     fi
 }
 
@@ -152,6 +155,7 @@ send_webhook_with_output() {
     local output_path="$4"
     local status="$5"
     local model_output="$6"
+    local test_image="$7"
     
     if [[ "$SEND_WEBHOOK" != "true" ]]; then
         return 0
@@ -175,7 +179,7 @@ send_webhook_with_output() {
     
     local payload=$(cat <<EOF
 {
-  "text": "${emoji} **Checkpoint ${status_text}**\n\n- **학습명**: ${train_name}\n- **Iteration**: ${iteration}\n- **입력 경로**: ${input_path}\n- **출력 경로**: ${output_path}\n- **시간**: ${timestamp}\n\n**🤖 모델 출력:**\n\`\`\`\n${escaped_output}\n\`\`\`"
+  "text": "${emoji} **Checkpoint ${status_text}**\n\n- **학습명**: ${train_name}\n- **Iteration**: ${iteration}\n- **입력 경로**: ${input_path}\n- **출력 경로**: ${output_path}\n- **시간**: ${timestamp}\n\n**🤖 모델 출력:**\n${escaped_output}\n\n**🖼️ 테스트 이미지:** ${test_image}"
 }
 EOF
 )
