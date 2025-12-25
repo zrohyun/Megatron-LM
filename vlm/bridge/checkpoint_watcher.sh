@@ -259,6 +259,10 @@ main() {
                 # 3. 변환 실행
                 if convert_checkpoint "$ckpt_dir"; then
                     ((converted_count++)) || true
+                    log "=========================================="
+                    log "Converted 1 checkpoint. Exiting for next CronJob cycle."
+                    log "=========================================="
+                    return 0
                 else
                     ((failed_count++)) || true
                 fi
