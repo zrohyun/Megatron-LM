@@ -112,6 +112,19 @@ def resize_if_too_small(image: Image.Image, min_size: int = 28) -> Image.Image:
     return image.resize((new_w, new_h), Image.BICUBIC)
 
 
+def _resize_image_max_pixel(image, size_factor=28, min_pixels=None, max_pixels=None):
+    resized_height, resized_width = smart_resize(
+        image.height,
+        image.width,
+        factor=size_factor,
+        min_pixels=min_pixels,
+        max_pixels=max_pixels,
+    )
+    image = image.resize((resized_width, resized_height))
+
+    return image
+
+
 class CustomCallback(TrainerCallback):
     def __init__(self):
         super().__init__()
@@ -224,12 +237,36 @@ class VLMDPOTrainer(DPOTrainer):
         )
 
         n_image_tokens = (prompt_input_ids == image_token_id).sum().item()
+        possible_image_tokens = 8000
+        if has_images and n_image_tokens > possible_image_tokens:
+            image_grid_thw_prod =  image_grid_thw.prod(dim=-1)
+            image_proportion = image_grid_thw_prod / image_grid_thw_prod.sum()
+            new_num_image_token = torch.floor(possible_image_tokens * image_proportion)
+
+            new_image_list = []
+            for _num, _img in zip(new_num_image_token, sample.images):
+                _max_pixel = 4 * _num * (processor.image_processor.patch_size ** 2)
+                _min_pixels = processor.image_processor.min_pixels
+                assert _max_pixel > _min_pixels # 이미지 줄이는 게 불가능한 경우
+                new_image_list.append(_resize_image_max_pixel(image=_img, min_pixels=_min_pixels, max_pixels=_max_pixel))
+                
+            proc_out = processor(
+                text=prompt_chat_text,
+                images=new_image_list,
+                return_tensors="pt",
+            )
+
+            # 이미지 re-프로세싱
+            prompt_input_ids = proc_out["input_ids"][0]                         # [L]
+            image_grid_thw = proc_out["image_grid_thw"]
+            pixel_values = proc_out["pixel_values"]          # [num_tiles, C, H, W] or None
+
         if n_image_tokens > 0:
             assert image_grid_thw.prod(dim=-1).sum() / 4 == n_image_tokens, features
-        
+            
         # Truncate prompt and completion sequences
-        if max_prompt_length is not None:
-            prompt_input_ids = prompt_input_ids[-max_prompt_length:]
+        # if max_prompt_length is not None:
+        #     prompt_input_ids = prompt_input_ids[-max_prompt_length:]
         if max_completion_length is not None:
             chosen_input_ids = chosen_input_ids[:max_completion_length]
             rejected_input_ids = rejected_input_ids[:max_completion_length]
@@ -344,7 +381,7 @@ def train():
     ################
     # Dataset
     ################
-    train_dataset = load_from_disk(data_args.data_path, keep_in_memory=False).shuffle(seed=2275).select(range(5000))
+    train_dataset = load_from_disk(data_args.data_path, keep_in_memory=False).shuffle(seed=2275)
     data_collator = DataCollatorForPreference(pad_token_id=processor.tokenizer.pad_token_id)
     
     ################
