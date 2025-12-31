@@ -27,20 +27,72 @@ class SFTLowLevelDataset:
             ]
     """
 
-    def __init__(self, dataset_path: str) -> None:
+    def __init__(self, dataset_path: str = None, dataset=None) -> None:
         try:
-            from datasets import load_dataset
+            from datasets import load_from_disk
         except ImportError:
             raise ImportError(
                 "SFTDataset currently requires datasets library to be installed"
             )
-        self.dataset = load_dataset("json", data_files=dataset_path, split="all")
+        
+        if dataset is not None:
+            self.dataset = dataset
+        elif dataset_path is not None:
+            if dataset_path.endswith(".jsonl"):
+                dataset_path = self._jsonl_to_arrow(dataset_path)
+            self.dataset = load_from_disk(dataset_path)
+        else:
+            raise ValueError("Either dataset_path or dataset must be provided")
 
     def __len__(self) -> int:
         return len(self.dataset)
 
     def __getitem__(self, idx: int) -> list:
-        return self.dataset[idx]["messages"]
+        import ast
+        
+        item = self.dataset[idx]
+        
+        if 'tools' in item:
+            if item['stage'] == "1":
+                pass
+            elif item['stage'] == "2":
+                tools_value = item['tools']
+                if isinstance(tools_value, str) and tools_value != "":
+                    item['tools'] = ast.literal_eval(tools_value)
+        
+        if 'query_and_response' in item:
+            qr_value = item['query_and_response']
+            if item['stage'] == "1":
+                pass
+            elif item['stage'] == "2":
+                if isinstance(qr_value, str) and qr_value != "":
+                    item['query_and_response'] = ast.literal_eval(qr_value)
+        
+        return item
+    
+    def _jsonl_to_arrow(self, dataset_path):
+        import os
+        import time
+        output_path = dataset_path.replace(".jsonl", "_arrow")
+        if os.path.exists(output_path):
+            return output_path
+        
+        global_rank = int(os.getenv("RANK"))
+        if global_rank != 0:
+            while True:
+                time.sleep(5)
+                if os.path.exists(output_path):
+                    return output_path
+
+        import shutil
+        from datasets import load_dataset
+        print("Read dataset from jsonl:", dataset_path)
+        dataset = load_dataset("json", data_files=dataset_path, split="train")
+
+        output_path_tmp = output_path + "_tmp"
+        dataset.save_to_disk(output_path_tmp)
+        shutil.move(output_path_tmp, output_path)
+        return output_path
 
 
 class SFTDataset(MegatronDataset):
@@ -56,6 +108,19 @@ class SFTDataset(MegatronDataset):
         config: GPTDatasetConfig,
     ) -> None:
         super().__init__(dataset, dataset_path, indices, num_samples, index_split, config)
+        tokenizer = self.config.tokenizer
+        self.start_id = tokenizer._tokenizer.vocab["<|START|>"]
+        self.end_id = tokenizer._tokenizer.vocab["<|END|>"]
+        self.unk_id = tokenizer._tokenizer.vocab["<unk>"]
+        self.role_start_id = tokenizer._tokenizer.vocab["<|role_start|>"]
+        self.role_end_id = tokenizer._tokenizer.vocab["<|role_end|>"]
+        self.think_start_id = tokenizer._tokenizer.vocab["<think>"]
+        self.think_end_id = tokenizer._tokenizer.vocab["</think>"]
+        self.nl_id = tokenizer._tokenizer.vocab["\n"]
+        self.nlnl_id = tokenizer._tokenizer.vocab["\n\n"]
+        self.system_id = tokenizer._tokenizer.encode("system")[0]
+        self.user_id = tokenizer._tokenizer.encode("user")[0]
+        self.assistant_id = tokenizer._tokenizer.encode("assistant")[0]
 
     @staticmethod
     def numel_low_level_dataset(low_level_dataset: LowLevelDataset) -> int:
@@ -74,76 +139,92 @@ class SFTDataset(MegatronDataset):
         max_seq_len = self.config.sequence_length
 
         conversation_list = self.dataset[int(self.indices[idx % len(self.indices)])]
-        tokens, target = tokenizer.tokenize_conversation(
-            conversation_list, return_target=True, add_generation_prompt=False
-        )
+        stage = conversation_list['stage']
+        if stage == "1":
+            tokens, target = tokenizer.tokenize_conversation_for_stage_1(
+                conversation_list["query_and_response"]
+            )
+            
+        elif stage == "2":
+            if conversation_list["도메인_대분류"] == "8":
+                tokens, target = tokenizer.tokenize_conversation(
+                    conversation_list["query_and_response"], return_target=True, add_generation_prompt=False, tools=conversation_list["tools"]
+                )
+            else:
+                tokens, target = tokenizer.tokenize_conversation(
+                    conversation_list["query_and_response"], return_target=True, add_generation_prompt=False
+                )
 
         # minus one to insert eos token
         if len(tokens) > max_seq_len - 1:
-            if True:  # TODO: when too long to fit in context, truncate left to right
-                tokens = tokens[: max_seq_len - 1]
-                target = target[: max_seq_len - 1]
-            else:  # right to left
-                tokens = tokens[-(max_seq_len - 1) :]
-                target = target[-(max_seq_len - 1) :]
+            # if True:  # TODO: when too long to fit in context, truncate left to right
+            #     tokens = tokens[: max_seq_len - 1]
+            #     target = target[: max_seq_len - 1]
+            # else:  # right to left
+            tokens = tokens[-(max_seq_len - 1) :]
+            target = target[-(max_seq_len - 1) :]
+        tokens = tokens.tolist()
+        target = target.tolist()
+
+        loss_mask = []
+        role_end, nl_check, keep_mask = True, False, False
+        for token_id in target:
+            if token_id in [self.unk_id, self.start_id, IGNORE_INDEX]:
+                loss_mask.append(0.0)
+            elif token_id == self.end_id:
+                loss_mask.append(1.0)
+            elif token_id == self.role_start_id:
+                loss_mask.append(0.0)
+                role_end = False
+            elif token_id == self.role_end_id:
+                loss_mask.append(0.0)
+                role_end = True
+                nl_check = True
+            elif token_id == self.think_start_id:
+                loss_mask.append(0.0)
+                nl_check = True
+            elif token_id == self.think_end_id:
+                loss_mask.append(1.0)
+                nl_check = True
+            elif nl_check and token_id in [self.nl_id, self.nlnl_id]:
+                loss_mask.append(0.0)
+                nl_check = False
+            elif not role_end:
+                loss_mask.append(0.0)
+                if token_id in [self.system_id, self.user_id]:
+                    keep_mask = True
+                elif token_id == self.assistant_id:
+                    keep_mask = False
+            elif keep_mask:
+                loss_mask.append(0.0)
+            else:
+                loss_mask.append(1.0)
+
+        if sum(loss_mask) == 0.0:
+            loss_mask = [1.0 if t in [self.end_id, self.think_end_id] else 0.0 for t in target]
 
         # padding
         num_tokens = len(tokens) + 1
         padding_len = max_seq_len - num_tokens
         assert padding_len >= 0
+        tokens.append(tokenizer.eod)
+        target.append(tokenizer.eod)
+        if sum(loss_mask) == 0.0:
+            loss_mask.append(1.0)
+        else:
+            loss_mask.append(0.0)
         filler = [tokenizer.pad] * (padding_len + 1)
+        tokens.extend(filler)
+        target.extend(filler)
+        loss_mask.extend([0.0] * len(filler))
+        tokens = tokens[:-1]
+        target = target[1:]
+        loss_mask = loss_mask[1:]
 
-        tokens = np.array(tokens.tolist() + [tokenizer.eod] + filler, dtype=np.int64)
-        target = np.array(target.tolist() + [tokenizer.eod] + filler, dtype=np.int64)
-
-        tokens = torch.tensor(tokens)
-        target = torch.tensor(target)
-
-        tokens = tokens[:-1].contiguous()
-        target = target[1:].contiguous()
-
-        loss_mask, position_ids, attention_mask = self._get_ltor_masks_and_position_ids(
-            max_seq_len, target, tokenizer.pad
-        )
-
-        if self.config.create_attention_mask:
-            ret = {
-                'tokens': tokens,
-                'labels': target,
-                'attention_mask': attention_mask,
-                'loss_mask': loss_mask,
-                'position_ids': position_ids,
-            }
-        else:
-            ret = {
-                'tokens': tokens,
-                'labels': target,
-                'loss_mask': loss_mask,
-                'position_ids': position_ids,
-            }
-
+        ret = {
+            'tokens': torch.tensor(tokens).contiguous(),
+            'labels': torch.tensor(target).contiguous(),
+            'loss_mask': torch.tensor(loss_mask),
+            'position_ids': torch.arange(max_seq_len, dtype=torch.long),
+        }
         return ret
-
-    def _get_ltor_masks_and_position_ids(self, max_seq_len, target, pad_token):
-        """Build masks and position id for left to right model for SFT"""
-
-        assert not self.config.reset_position_ids and not self.config.reset_attention_mask
-
-        # Position ids.
-        position_ids = torch.arange(max_seq_len, dtype=torch.long)
-
-        # Loss mask.
-        loss_mask = torch.ones(max_seq_len, dtype=torch.float)
-        loss_mask[target == pad_token] = 0.0  # mask paddings
-        loss_mask[target == IGNORE_INDEX] = 0.0  # mask prompts
-
-        if self.config.create_attention_mask:
-            attention_mask = torch.tril(
-                torch.ones((seq_length, seq_length), device=data.device)
-            ).unsqueeze(0)
-            # Convert attention mask to binary:
-            attention_mask = attention_mask < 0.5
-        else:
-            attention_mask = None
-
-        return loss_mask, position_ids, attention_mask

@@ -1115,6 +1115,15 @@ def validate_args(args, defaults={}):
             args.recompute_granularity != 'full'
         ), 'recompute_granularity must not be full when CUDA Graphs are enabled.'
 
+    # check length when tp != expert_tp and blockwise fp8 recipe, 
+    # to ensure seq_length must be divided with attention_heads * 8 * 16 
+    # see also: transformer_engine float8_blockwise_tensor.py, is_quantizable() function.
+    if args.fp8_recipe == "blockwise" and args.tensor_model_parallel_size != args.expert_tensor_parallel_size:
+        assert args.seq_length % (args.num_attention_heads * 8 * 16) == 0, (
+            f"when tp != expert_tp and FP8 blockwise scaling, must be seq_length({args.seq_length}) %% "
+            f"(num-attention-heads ({args.num_attention_heads}) * 8 * 16) == 0"
+        )
+
     # Print arguments.
     _print_args("arguments", args)
 
@@ -1208,6 +1217,9 @@ def core_transformer_config_from_args(args, config_class=None):
         kw_args['use_kitchen'] = True
         kw_args['quant_recipe'] = kitchen_quantization_recipe_config(args.kitchen_recipe_number)
 
+    # JHSHIN added. 추후 옵션이 새로 들어오면 사라져야 함.
+    kw_args['window_size'] = (getattr(args, "sliding_window_size", None) or 512, 0)
+    kw_args['interleaved_attn_pattern'] = ((getattr(args, "sliding_window_interleave_k", None) or 6) - 1, 1)
 
     # Return config.
     return config_class(**kw_args)
@@ -1436,6 +1448,8 @@ def _add_network_size_args(parser):
     group.add_argument('--max-position-embeddings', type=int, default=None,
                        help='Maximum number of position embeddings to use. '
                        'This is the size of position embedding.')
+    group.add_argument('--original-max-position-embeddings', type=int, default=4096,
+                       help='Maximum number of position embeddings for yarn.')
     group.add_argument('--position-embedding-type', type=str, default='learned_absolute',
                         choices=['learned_absolute', 'rope', 'mrope', 'relative', 'none'],
                         help='Position embedding type.')
@@ -1518,6 +1532,13 @@ def _add_network_size_args(parser):
                        'We compute the average of the MTP losses across all depths, '
                        'and multiply it the scaling factor to obtain the overall MTP loss, '
                        'which serves as an additional training objective.')
+    # JHSHIN ADDED for SWA 
+    group.add_argument('--sliding-window-interleave-k', type=int, default=None,
+                       help="set sliding window interleaving with (k-1):1 ratio.") 
+    group.add_argument('--sliding-window-size', type=int, default=None,
+                       help="set local sliding window size. recommends 512 tokens.")
+    group.add_argument('--freeze-router', action='store_true')
+
     return parser
 
 
@@ -2801,6 +2822,7 @@ def _add_moe_args(parser):
                        help='Enable overlapping between shared expert computations and dispatcher communications. '
                        'Without this, the shared epxerts execute after the routed experts. '
                        'Only effective when moe-shared-expert-intermediate-size is set.')
+    group.add_argument('--disable-tp-for-moe-shared-expert', action='store_false', dest='tp_for_moe_shared_expert')
     group.add_argument('--moe-grouped-gemm', action='store_true',
                        help='When there are multiple experts per rank, launch multiple local GEMM kernels in multiple streams to improve the utilization and performance with GroupedLinear in TransformerEngine.')
     group.add_argument('--moe-use-legacy-grouped-gemm', action='store_true',
