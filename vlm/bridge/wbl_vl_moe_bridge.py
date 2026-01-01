@@ -39,6 +39,7 @@ def get_mapping_list() -> list:
         "language_model.decoder.layers.*.self_attention.linear_q_up_proj.layer_norm_weight": "model.language_model.layers.*.self_attn.q_a_layernorm.weight",
         "language_model.decoder.layers.*.self_attention.linear_kv_down_proj.weight": "model.language_model.layers.*.self_attn.kv_a_proj_with_mqa.weight",
         "language_model.decoder.layers.*.self_attention.linear_kv_up_proj.weight": "model.language_model.layers.*.self_attn.kv_b_proj.weight",
+        "decoder.layers.*.self_attention.kv_layernorm.weight": "model.layers.*.self_attn.kv_a_layernorm.weight",
         "language_model.decoder.layers.*.self_attention.linear_kv_up_proj.layer_norm_weight": "model.language_model.layers.*.self_attn.kv_a_layernorm.weight",
         "language_model.decoder.layers.*.self_attention.post_attn_layernorm.weight": "model.language_model.layers.*.post_attention_layernorm.weight",
         # Dense MLP
@@ -53,6 +54,10 @@ def get_mapping_list() -> list:
         # LM Head
         "language_model.decoder.final_layernorm.weight": "model.language_model.norm.weight",
         "language_model.output_layer.weight": "lm_head.weight",
+        # Mcore local spec
+        "decoder.layers.*.self_attention.q_layernorm.weight": "model.layers.*.self_attn.q_a_layernorm.weight",
+        # For models without MLA
+        "decoder.layers.*.self_attention.linear_q_proj.weight": "model.layers.*.self_attn.q_proj.weight",
         # ViT 
         "vision_model.decoder.layers.*.self_attention.linear_qkv.bias": "model.visual.blocks.*.attn.qkv.bias",
         "vision_model.decoder.layers.*.self_attention.linear_qkv.weight": "model.visual.blocks.*.attn.qkv.weight",

@@ -134,25 +134,19 @@ class WBLVLMoECausalLMOutputWithPast(ModelOutput):
 
 
 class WBLRotaryEmbedding(nn.Module):
-    def __init__(self, config: WBLVLMoETextConfig, device=None):
+    def __init__(self, config: WBLConfig, rope_type="default", original_max_position_embeddings=None, device=None):
         super().__init__()
-        # BC: "rope_type" was originally "type"
-        if hasattr(config, "rope_scaling") and config.rope_scaling is not None and isinstance(config.rope_scaling, dict):
-            self.rope_type = config.rope_scaling.get("rope_type", config.rope_scaling.get("type"))
-        else:
-            self.rope_type = "default"
+        self.rope_type = rope_type
         self.max_seq_len_cached = config.max_position_embeddings
-        self.original_max_seq_len = config.max_position_embeddings
+        self.original_max_seq_len = original_max_position_embeddings
 
         self.config = config
         self.rope_init_fn = ROPE_INIT_FUNCTIONS[self.rope_type]
 
         inv_freq, self.attention_scaling = self.rope_init_fn(self.config, device)
         self.register_buffer("inv_freq", inv_freq, persistent=False)
-        self.original_inv_freq = self.inv_freq
 
     @torch.no_grad()
-    @dynamic_rope_update  # power user: used with advanced RoPE types (e.g. dynamic rope)
     def forward(self, x, position_ids):
         inv_freq_expanded = self.inv_freq[None, :, None].float().expand(position_ids.shape[0], -1, 1).to(x.device)
         position_ids_expanded = position_ids[:, None, :].float()
@@ -165,7 +159,6 @@ class WBLRotaryEmbedding(nn.Module):
             sin = emb.sin() * self.attention_scaling
 
         return cos.to(dtype=x.dtype), sin.to(dtype=x.dtype)
-
 
 # Copied from transformers.models.llama.modeling_llama.rotate_half
 def rotate_half(x):
@@ -510,7 +503,7 @@ class WBLTopkRouter(nn.Module):
             denominator = topk_weights.sum(dim=-1, keepdim=True) + 1e-20
             topk_weights /= denominator
         topk_weights = topk_weights * self.routed_scaling_factor
-        return topk_indices, topk_weights    
+        return topk_indices, topk_weights
 
 
 class WBLMoE(nn.Module):
@@ -598,12 +591,8 @@ def yarn_get_mscale(scale=1, mscale=1):
     return 0.1 * mscale * math.log(scale) + 1.0
 
 class WBLAttention(nn.Module):
-    """
-    Multi-headed attention from 'Attention Is All You Need' paper. Modified to use sliding window attention: Longformer
-    and "Generating Long Sequences with Sparse Transformers".
-    """
 
-    def __init__(self, config: WBLVLMoETextConfig, layer_idx: int):
+    def __init__(self, config: WBLConfig, layer_idx: int):
         super().__init__()
         self.is_sliding = config.layer_types[layer_idx] == "sliding_attention"
         self.config = config
@@ -646,10 +635,9 @@ class WBLAttention(nn.Module):
 
         self.scaling = self.qk_head_dim ** (-0.5)
         if self.config.rope_scaling is not None and not self.is_sliding:
-            # TODO: check yarn related logic
             mscale_all_dim = self.config.rope_scaling.get("mscale_all_dim", 0)
-            scaling_factor = self.config.rope_scaling["factor"]
             if mscale_all_dim:
+                scaling_factor = self.config.rope_scaling["factor"]
                 mscale = yarn_get_mscale(scaling_factor, mscale_all_dim)
                 self.scaling = self.scaling * mscale * mscale
 
@@ -973,13 +961,21 @@ class WBLVLMoE_TextModel(WBLVLMoEPreTrainedModel):
             [WBLDecoderLayer(config, layer_idx) for layer_idx in range(config.num_hidden_layers)]
         )
         self.norm = WBLRMSNorm(config.hidden_size, eps=config.rms_norm_eps)
-        self.rotary_emb_local = WBLRotaryEmbedding(config=config)
         self.gradient_checkpointing = False
+        
+        self.rotary_emb_local = WBLRotaryEmbedding(config=config)
 
         config = copy.deepcopy(config)
         config.rope_theta = config.rope_theta_global
-        self.rotary_emb_global = WBLRotaryEmbedding(config=config)
-        self.rotary_emb_global.inv_freq /= 8.0  # TODO: Possibly change in the future
+        if self.config.rope_scaling is None:
+            rope_type = "default"
+            original_max_position_embeddings = config.max_position_embeddings
+        else:
+            rope_type = config.rope_scaling["rope_type"]
+            original_max_position_embeddings = config.rope_scaling["original_max_position_embeddings"]
+        self.rotary_emb_global = WBLRotaryEmbedding(config=config, rope_type=rope_type, original_max_position_embeddings=original_max_position_embeddings)
+        if rope_type == "default":
+            self.rotary_emb_global.inv_freq /= 8.0
 
         # Initialize weights and apply final processing
         self.post_init()
@@ -1256,7 +1252,7 @@ class WBLVLMoEForCausalLM(WBLVLMoEPreTrainedModel, GenerationMixin):
         super().__init__(config)
         self.model = WBLVLMoE_Model(config)
         self.vocab_size = config.vocab_size
-        self.lm_head = nn.Linear(config.text_config.hidden_size, config.text_config.vocab_size, bias=False)
+        self.lm_head = nn.Linear(config.text_config.hidden_size, config.text_config.vocab_size, bias=False, dtype=torch.float32)
 
         self.post_init()
 
@@ -1270,7 +1266,7 @@ class WBLVLMoEForCausalLM(WBLVLMoEPreTrainedModel, GenerationMixin):
         return self.lm_head
 
     def set_output_embeddings(self, new_embeddings):
-        self.lm_head = new_embeddings
+        self.lm_head = new_embeddings.to(torch.float32)
 
     def set_decoder(self, decoder):
         self.model = decoder
@@ -1310,52 +1306,6 @@ class WBLVLMoEForCausalLM(WBLVLMoEPreTrainedModel, GenerationMixin):
         logits_to_keep: Union[int, torch.Tensor] = 0,
         **kwargs: Unpack[TransformersKwargs],
     ) -> Union[Tuple, WBLVLMoECausalLMOutputWithPast]:
-        r"""
-        labels (`torch.LongTensor` of shape `(batch_size, sequence_length)`, *optional*):
-            Labels for computing the masked language modeling loss. Indices should either be in `[0, ...,
-            config.vocab_size]` or -100 (see `input_ids` docstring). Tokens with indices set to `-100` are ignored
-            (masked), the loss is only computed for the tokens with labels in `[0, ..., config.vocab_size]`.
-        pixel_values_videos (`torch.FloatTensor` of shape `(seq_length, num_channels * temporal_size * image_size * image_size)):
-            The tensors corresponding to the input videos. Pixel values can be obtained using
-            [`AutoImageProcessor`]. See [`Qwen2VLImageProcessor.__call__`] for details. [`Qwen2VLProcessor`] uses
-            [`Qwen2VLImageProcessor`] for processing videos.
-        image_grid_thw (`torch.LongTensor` of shape `(num_images, 3)`, *optional*):
-            The temporal, height and width of feature shape of each image in LLM.
-        video_grid_thw (`torch.LongTensor` of shape `(num_videos, 3)`, *optional*):
-            The temporal, height and width of feature shape of each video in LLM.
-        rope_deltas (`torch.LongTensor` of shape `(batch_size, )`, *optional*):
-            The rope index difference between sequence length and multimodal rope.
-
-        Example:
-
-        ```python
-        >>> from PIL import Image
-        >>> import requests
-        >>> from transformers import AutoProcessor, AutoModelForCausalLM
-
-        >>> model = AutoModelForCausalLM.from_pretrained("Deep-VLM/LLaVAOV1.5-4b", trust_remote_code=True)
-        >>> processor = AutoProcessor.from_pretrained("Deep-VLM/LLaVAOV1.5-4b", trust_remote_code=True)
-
-        >>> messages = [
-            {
-                "role": "user",
-                "content": [
-                    {"type": "image"},
-                    {"type": "text", "text": "What is shown in this image?"},
-                ],
-            },
-        ]
-        >>> url = "https://www.ilankelman.org/stopsigns/australia.jpg"
-        >>> image = Image.open(requests.get(url, stream=True).raw)
-
-        >>> text = processor.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
-        >>> inputs = processor(text=[text], images=[image], vision_infos=[vision_infos])
-
-        >>> # Generate
-        >>> generate_ids = model.generate(inputs.input_ids, max_length=30)
-        >>> tokenizer.batch_decode(generate_ids, skip_special_tokens=True, clean_up_tokenization_spaces=False)[0]
-        "The image shows a street scene with a red stop sign in the foreground. In the background, there is a large red gate with Chinese characters ..."
-        ```"""
 
         output_attentions = output_attentions if output_attentions is not None else self.config.output_attentions
         output_hidden_states = (
@@ -1384,7 +1334,7 @@ class WBLVLMoEForCausalLM(WBLVLMoEPreTrainedModel, GenerationMixin):
         hidden_states = outputs.last_hidden_state
         # Only compute necessary logits, and do not upcast them to float if we are not computing the loss
         slice_indices = slice(-logits_to_keep, None) if isinstance(logits_to_keep, int) else logits_to_keep
-        logits = self.lm_head(hidden_states[:, slice_indices, :])
+        logits = self.lm_head(hidden_states[:, slice_indices, :]).to(self.lm_head.weight.dtype)
 
         loss = None
         if labels is not None:
