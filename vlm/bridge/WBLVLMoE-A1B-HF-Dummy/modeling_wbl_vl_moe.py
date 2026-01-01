@@ -134,7 +134,7 @@ class WBLVLMoECausalLMOutputWithPast(ModelOutput):
 
 
 class WBLRotaryEmbedding(nn.Module):
-    def __init__(self, config: WBLConfig, rope_type="default", original_max_position_embeddings=None, device=None):
+    def __init__(self, config: WBLVLMoETextConfig, rope_type="default", original_max_position_embeddings=None, device=None):
         super().__init__()
         self.rope_type = rope_type
         self.max_seq_len_cached = config.max_position_embeddings
@@ -592,7 +592,7 @@ def yarn_get_mscale(scale=1, mscale=1):
 
 class WBLAttention(nn.Module):
 
-    def __init__(self, config: WBLConfig, layer_idx: int):
+    def __init__(self, config: WBLVLMoETextConfig, layer_idx: int):
         super().__init__()
         self.is_sliding = config.layer_types[layer_idx] == "sliding_attention"
         self.config = config
@@ -1492,7 +1492,7 @@ class WBLVLMoEForCausalLM(WBLVLMoEPreTrainedModel, GenerationMixin):
                     and key not in visual_keys
                 ):
                     dict_to_expand[key] = dict_to_expand[key].repeat_interleave(expand_size, dim=0)
-            return dict_to_expands
+            return dict_to_expand
         # input_ids is required for expanding visual inputs
         # If input_ids is unavailable, visual inputs will not be used; therefore, there is no need to expand visual inputs.
         if input_ids is not None and input_ids.numel() != 0:

@@ -26,7 +26,7 @@ class WBLVLMoETextConfig(PretrainedConfig):
         "norm": (["hidden_states"], ["hidden_states"]),
     }
     
-def __init__(
+    def __init__(
         self,
         vocab_size=129280,
         hidden_size=7168,
