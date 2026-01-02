@@ -39,7 +39,6 @@ import torch.nn as nn
 from vlm.bridge.rice_gpt_provider import rice_gpt_model_provider_with_args
 # from vlm.train.pretrain.pretrain_rice_gpt import model_provider
 
-from vlm.bridge.wbl_vl_moe_bridge import WBLBridge # register bridge
 from vlm.bridge.vaetki_vl_bridge import VaetkiBridge # register bridge
 
 dim = 1024
@@ -254,7 +253,7 @@ if __name__ == "__main__":
             torch.save(megatron_model.state_dict(), "/workspace/vlm/bridge/megatron.ckpt")
             print("Megatron state dict saved! at /workspace/vlm/bridge/megatron.ckpt")
         bridge.save_hf_pretrained([megatron_model], args.hf_path)
-        shutil.copy(f"{args.hf_model}/modeling_wbl_vl_moe.py", args.hf_path)
+        shutil.copy(f"{args.hf_model}/modeling_vaetki_vl.py", args.hf_path)
         shutil.copy(f"{args.hf_model}/preprocessor_config.json", args.hf_path)
         shutil.copy(f"{args.hf_model}/video_preprocessor_config.json", args.hf_path)
     print(f"✅ Successfully exported model to: {args.hf_path}")
