@@ -167,7 +167,7 @@ class RiceConfig(PretrainedConfig):
 class VaetkiVLConfig(PretrainedConfig):
     r"""
     Args:
-        text_config (`Union[PreTrainedConfig, dict]`, *optional*, defaults to `WBLVLMoETextConfig`):
+        text_config (`Union[PreTrainedConfig, dict]`, *optional*, defaults to `VaetkiVLTextConfig`):
             The config object or dictionary of the text backbone.
         vision_config (`Union[PreTrainedConfig, dict]`,  *optional*, defaults to `RiceConfig`):
             The config object or dictionary of the vision backbone.
@@ -177,7 +177,7 @@ class VaetkiVLConfig(PretrainedConfig):
             The video token index to encode the image prompt.
     """
 
-    model_type = "wbl_vl_moe"
+    model_type = "vaetki_vl"
     sub_configs = {"vision_config": RiceConfig, "text_config": VaetkiVLTextConfig}
     keys_to_ignore_at_inference = ["past_key_values"]
 

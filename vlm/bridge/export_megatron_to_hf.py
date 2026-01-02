@@ -40,6 +40,7 @@ from vlm.bridge.rice_gpt_provider import rice_gpt_model_provider_with_args
 # from vlm.train.pretrain.pretrain_rice_gpt import model_provider
 
 from vlm.bridge.wbl_vl_moe_bridge import WBLBridge # register bridge
+from vlm.bridge.vaetki_vl_bridge import VaetkiBridge # register bridge
 
 dim = 1024
 num_heads = 16

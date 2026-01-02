@@ -4,7 +4,7 @@
   "auto_map": {
     "AutoConfig": "configuration_vaetki_vl.VaetkiVLConfig",
     "AutoModel": "modeling_vaetki_vl.VaetkiVLForCausalLM",
-    "AutoModelForCausalLM": "modeling_wbl_vl_moe.VaetkiVLForCausalLM"
+    "AutoModelForCausalLM": "modeling_vaetki_vl.VaetkiVLForCausalLM"
   },
   "text_config":{
     "model_type": "vaetki_vl",
