@@ -17,7 +17,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""PyTorch WBLVLMoE model."""
+"""PyTorch VaetkiVL model."""
 
 import copy
 import math
@@ -45,7 +45,7 @@ from transformers.integrations import use_kernel_forward_from_hub
 from transformers.processing_utils import Unpack
 from transformers.modeling_flash_attention_utils import FlashAttentionKwargs
 from transformers import AutoModelForCausalLM, AutoConfig
-from .configuration_wbl_vl_moe import WBLVLMoEConfig, WBLVLMoETextConfig, RiceConfig
+from .configuration_vaetki_vl import VaetkiVLConfig, VaetkiVLTextConfig, RiceConfig
 
 if is_flash_attn_available():
     from flash_attn import flash_attn_varlen_func
@@ -59,7 +59,7 @@ logger = logging.get_logger(__name__)
 
 
 @dataclass
-class WBLVLMoEModelOutputWithPast(ModelOutput):
+class VaetkiVLModelOutputWithPast(ModelOutput):
     """
     Base class for Llava outputs, with hidden states and attentions.
 
@@ -95,7 +95,7 @@ class WBLVLMoEModelOutputWithPast(ModelOutput):
 
 
 @dataclass
-class WBLVLMoECausalLMOutputWithPast(ModelOutput):
+class VaetkiVLCausalLMOutputWithPast(ModelOutput):
     """
     Base class for LLaVAOneVision1.5 causal language model (or autoregressive) outputs.
 
@@ -133,8 +133,8 @@ class WBLVLMoECausalLMOutputWithPast(ModelOutput):
     rope_deltas: Optional[torch.LongTensor] = None
 
 
-class WBLRotaryEmbedding(nn.Module):
-    def __init__(self, config: WBLVLMoETextConfig, rope_type="default", original_max_position_embeddings=None, device=None):
+class VaetkiRotaryEmbedding(nn.Module):
+    def __init__(self, config: VaetkiVLTextConfig, rope_type="default", original_max_position_embeddings=None, device=None):
         super().__init__()
         self.rope_type = rope_type
         self.max_seq_len_cached = config.max_position_embeddings
@@ -442,7 +442,7 @@ class RiceBlock(nn.Module):
 
 
 @use_kernel_forward_from_hub("RMSNorm")
-class WBLRMSNorm(nn.Module):
+class VaetkiRMSNorm(nn.Module):
     def __init__(self, hidden_size, eps=1e-6):
         super().__init__()
         self.weight = nn.Parameter(torch.zeros(hidden_size))
@@ -459,7 +459,7 @@ class WBLRMSNorm(nn.Module):
         return f"{tuple(self.weight.shape)}, eps={self.variance_epsilon}"
 
 
-class WBLMLP(nn.Module):
+class VaetkiMLP(nn.Module):
     def __init__(self, config, hidden_size=None, intermediate_size=None):
         super().__init__()
         self.config = config
@@ -476,7 +476,7 @@ class WBLMLP(nn.Module):
         return down_proj
 
 
-class WBLTopkRouter(nn.Module):
+class VaetkiTopkRouter(nn.Module):
     def __init__(self, config):
         super().__init__()
         self.config = config
@@ -506,19 +506,19 @@ class WBLTopkRouter(nn.Module):
         return topk_indices, topk_weights
 
 
-class WBLMoE(nn.Module):
+class VaetkiMoE(nn.Module):
 
     def __init__(self, config):
         super().__init__()
         self.config = config
         self.experts = nn.ModuleList(
             [
-                WBLMLP(config, intermediate_size=config.moe_intermediate_size)
+                VaetkiMLP(config, intermediate_size=config.moe_intermediate_size)
                 for _ in range(config.n_routed_experts)
             ]
         )
-        self.gate = WBLTopkRouter(config)
-        self.shared_experts = WBLMLP(
+        self.gate = VaetkiTopkRouter(config)
+        self.shared_experts = VaetkiMLP(
             config=config, intermediate_size=config.moe_intermediate_size * config.n_shared_experts
         )
 
@@ -590,9 +590,9 @@ def yarn_get_mscale(scale=1, mscale=1):
         return 1.0
     return 0.1 * mscale * math.log(scale) + 1.0
 
-class WBLAttention(nn.Module):
+class VaetkiAttention(nn.Module):
 
-    def __init__(self, config: WBLVLMoETextConfig, layer_idx: int):
+    def __init__(self, config: VaetkiVLTextConfig, layer_idx: int):
         super().__init__()
         self.is_sliding = config.layer_types[layer_idx] == "sliding_attention"
         self.config = config
@@ -612,7 +612,7 @@ class WBLAttention(nn.Module):
             self.q_proj = nn.Linear(config.hidden_size, self.num_heads * self.qk_head_dim, bias=False)
         else:
             self.q_a_proj = nn.Linear(config.hidden_size, config.q_lora_rank, bias=config.attention_bias)
-            self.q_a_layernorm = WBLRMSNorm(config.q_lora_rank, eps=config.rms_norm_eps)
+            self.q_a_layernorm = VaetkiRMSNorm(config.q_lora_rank, eps=config.rms_norm_eps)
             self.q_b_proj = nn.Linear(config.q_lora_rank, self.num_heads * self.qk_head_dim, bias=False)
 
         self.kv_a_proj_with_mqa = nn.Linear(
@@ -620,7 +620,7 @@ class WBLAttention(nn.Module):
             self.kv_lora_rank + self.qk_rope_head_dim,
             bias=config.attention_bias,
         )
-        self.kv_a_layernorm = WBLRMSNorm(self.kv_lora_rank, eps=config.rms_norm_eps)
+        self.kv_a_layernorm = VaetkiRMSNorm(self.kv_lora_rank, eps=config.rms_norm_eps)
         self.kv_b_proj = nn.Linear(
             self.kv_lora_rank,
             self.num_heads * (self.qk_nope_head_dim + self.v_head_dim),
@@ -711,22 +711,22 @@ class WBLAttention(nn.Module):
         return attn_output, attn_weights
 
 
-class WBLDecoderLayer(GradientCheckpointingLayer):
-    def __init__(self, config: WBLVLMoETextConfig, layer_idx: int):
+class VaetkiDecoderLayer(GradientCheckpointingLayer):
+    def __init__(self, config: VaetkiVLTextConfig, layer_idx: int):
         super().__init__()
         self.hidden_size = config.hidden_size
         self.attention_type = config.layer_types[layer_idx]
-        self.self_attn = WBLAttention(config=config, layer_idx=layer_idx)
+        self.self_attn = VaetkiAttention(config=config, layer_idx=layer_idx)
 
         if layer_idx >= config.first_k_dense_replace:
-            self.mlp = WBLMoE(config)
+            self.mlp = VaetkiMoE(config)
         else:
-            self.mlp = WBLMLP(config)
+            self.mlp = VaetkiMLP(config)
 
-        self.input_layernorm = WBLRMSNorm(config.hidden_size, eps=config.rms_norm_eps)
-        self.post_attention_layernorm = WBLRMSNorm(config.hidden_size, eps=config.rms_norm_eps)
-        self.pre_mlp_layernorm = WBLRMSNorm(config.hidden_size, eps=config.rms_norm_eps)
-        self.post_mlp_layernorm = WBLRMSNorm(config.hidden_size, eps=config.rms_norm_eps)
+        self.input_layernorm = VaetkiRMSNorm(config.hidden_size, eps=config.rms_norm_eps)
+        self.post_attention_layernorm = VaetkiRMSNorm(config.hidden_size, eps=config.rms_norm_eps)
+        self.pre_mlp_layernorm = VaetkiRMSNorm(config.hidden_size, eps=config.rms_norm_eps)
+        self.post_mlp_layernorm = VaetkiRMSNorm(config.hidden_size, eps=config.rms_norm_eps)
 
     def forward(
         self,
@@ -779,11 +779,12 @@ class WBLDecoderLayer(GradientCheckpointingLayer):
     
 
 @auto_docstring
-class WBLVLMoEPreTrainedModel(PreTrainedModel):
-    config_class = WBLVLMoEConfig
+class VaetkiVLPreTrainedModel(PreTrainedModel):
+    config_class = VaetkiVLConfig
     base_model_prefix = "model"
     supports_gradient_checkpointing = True
-    _no_split_modules = ["WBLDecoderLayer", "RiceBlock"]
+    supports_gradient_checkpointing = True
+    _no_split_modules = ["VaetkiDecoderLayer", "RiceBlock"]
     _skip_keys_device_placement = "past_key_values"
     _supports_flash_attn = True
     _supports_sdpa = False
@@ -792,6 +793,7 @@ class WBLVLMoEPreTrainedModel(PreTrainedModel):
     _supports_quantized_cache = True
     _supports_static_cache = True
     _supports_attention_backend = True
+
 
     def _init_weights(self, module):
         std = self.config.get_text_config().initializer_range
@@ -803,14 +805,14 @@ class WBLVLMoEPreTrainedModel(PreTrainedModel):
             module.weight.data.normal_(mean=0.0, std=std)
             if module.padding_idx is not None:
                 module.weight.data[module.padding_idx].zero_()
-        elif isinstance(module, WBLRMSNorm):
+        elif isinstance(module, VaetkiRMSNorm):
             module.weight.data.fill_(1.0)
-        elif isinstance(module, WBLTopkRouter):
+        elif isinstance(module, VaetkiTopkRouter):
             module.weight.data.normal_(mean=0.0, std=std)
 
 
 @auto_docstring
-class RiceTransformerPretrainedModel(WBLVLMoEPreTrainedModel):
+class RiceTransformerPretrainedModel(VaetkiVLPreTrainedModel):
     config_class = RiceConfig
     _no_split_modules = ["RiceBlock"]
 
@@ -947,22 +949,22 @@ class RiceTransformerPretrainedModel(WBLVLMoEPreTrainedModel):
 
 
 @auto_docstring
-class WBLVLMoE_TextModel(WBLVLMoEPreTrainedModel):
-    config_class = WBLVLMoETextConfig
+class VaetkiVLTextModel(VaetkiVLPreTrainedModel):
+    config_class = VaetkiVLTextConfig
 
-    def __init__(self, config: WBLVLMoETextConfig):
+    def __init__(self, config: VaetkiVLTextConfig):
         super().__init__(config)
         self.padding_idx = config.pad_token_id
         self.vocab_size = config.vocab_size
 
         self.embed_tokens = nn.Embedding(config.vocab_size, config.hidden_size, self.padding_idx)
         self.layers = nn.ModuleList(
-            [WBLDecoderLayer(config, layer_idx) for layer_idx in range(config.num_hidden_layers)]
+            [VaetkiDecoderLayer(config, layer_idx) for layer_idx in range(config.num_hidden_layers)]
         )
-        self.norm = WBLRMSNorm(config.hidden_size, eps=config.rms_norm_eps)
+        self.norm = VaetkiRMSNorm(config.hidden_size, eps=config.rms_norm_eps)
         self.gradient_checkpointing = False
         
-        self.rotary_emb_local = WBLRotaryEmbedding(config=config)
+        self.rotary_emb_local = VaetkiRotaryEmbedding(config=config)
 
         config = copy.deepcopy(config)
         config.rope_theta = config.rope_theta_global
@@ -972,7 +974,7 @@ class WBLVLMoE_TextModel(WBLVLMoEPreTrainedModel):
         else:
             rope_type = config.rope_scaling["rope_type"]
             original_max_position_embeddings = config.rope_scaling["original_max_position_embeddings"]
-        self.rotary_emb_global = WBLRotaryEmbedding(config=config, rope_type=rope_type, original_max_position_embeddings=original_max_position_embeddings)
+        self.rotary_emb_global = VaetkiRotaryEmbedding(config=config, rope_type=rope_type, original_max_position_embeddings=original_max_position_embeddings)
         if rope_type == "default":
             self.rotary_emb_global.inv_freq /= 8.0
 
@@ -1087,14 +1089,14 @@ class WBLVLMoE_TextModel(WBLVLMoEPreTrainedModel):
     
 
 @auto_docstring
-class WBLVLMoE_Model(WBLVLMoEPreTrainedModel):
+class VaetkiVLModel(VaetkiVLPreTrainedModel):
     base_model_prefix = "model"
     _checkpoint_conversion_mapping = {}
 
-    def __init__(self, config: WBLVLMoEConfig):
+    def __init__(self, config: VaetkiVLConfig):
         super().__init__(config)
         self.visual = RiceTransformerPretrainedModel._from_config(config.vision_config)
-        self.language_model = WBLVLMoE_TextModel._from_config(config.text_config)
+        self.language_model = VaetkiVLTextModel._from_config(config.text_config)
         self.rope_deltas = None  # cache rope_deltas here
 
         # Initialize weights and apply final processing
@@ -1155,7 +1157,7 @@ class WBLVLMoE_Model(WBLVLMoEPreTrainedModel):
         rope_deltas: Optional[torch.LongTensor] = None,
         cache_position: Optional[torch.LongTensor] = None,
         **kwargs: Unpack[TransformersKwargs],
-    ) -> Union[Tuple, WBLVLMoEModelOutputWithPast]:
+    ) -> Union[Tuple, VaetkiVLModelOutputWithPast]:
         r"""
         pixel_values_videos (`torch.FloatTensor` of shape `(seq_length, num_channels * temporal_size * image_size * image_size)):
             The tensors corresponding to the input videos. Pixel values can be obtained using
@@ -1228,7 +1230,7 @@ class WBLVLMoE_Model(WBLVLMoEPreTrainedModel):
             **kwargs
         )
 
-        output = WBLVLMoEModelOutputWithPast(
+        output = VaetkiVLModelOutputWithPast(
             last_hidden_state=outputs.last_hidden_state,
             past_key_values=outputs.past_key_values,
             hidden_states=outputs.hidden_states,
@@ -1237,7 +1239,7 @@ class WBLVLMoE_Model(WBLVLMoEPreTrainedModel):
         )
         return output if return_dict else output.to_tuple()
 
-class WBLVLMoEForCausalLM(WBLVLMoEPreTrainedModel, GenerationMixin):
+class VaetkiVLForCausalLM(VaetkiVLPreTrainedModel, GenerationMixin):
     _checkpoint_conversion_mapping = {
         "^visual": "model.visual",
         r"^model(?!\.(language_model|visual))": "model.language_model",
@@ -1249,7 +1251,7 @@ class WBLVLMoEForCausalLM(WBLVLMoEPreTrainedModel, GenerationMixin):
 
     def __init__(self, config):
         super().__init__(config)
-        self.model = WBLVLMoE_Model(config)
+        self.model = VaetkiVLModel(config)
         self.vocab_size = config.vocab_size
         self.lm_head = nn.Linear(config.text_config.hidden_size, config.text_config.vocab_size, bias=False, dtype=torch.float32)
 
@@ -1304,7 +1306,7 @@ class WBLVLMoEForCausalLM(WBLVLMoEPreTrainedModel, GenerationMixin):
         cache_position: Optional[torch.LongTensor] = None,
         logits_to_keep: Union[int, torch.Tensor] = 0,
         **kwargs: Unpack[TransformersKwargs],
-    ) -> Union[Tuple, WBLVLMoECausalLMOutputWithPast]:
+    ) -> Union[Tuple, VaetkiVLCausalLMOutputWithPast]:
         r"""
         labels (`torch.LongTensor` of shape `(batch_size, sequence_length)`, *optional*):
             Labels for computing the masked language modeling loss. Indices should either be in `[0, ...,
@@ -1356,7 +1358,7 @@ class WBLVLMoEForCausalLM(WBLVLMoEPreTrainedModel, GenerationMixin):
             loss = self.loss_function(logits=logits, labels=labels, vocab_size=self.config.vocab_size, **kwargs)
 
 
-        return WBLVLMoECausalLMOutputWithPast(
+        return VaetkiVLCausalLMOutputWithPast(
             loss=loss,
             logits=logits,
             past_key_values=outputs.past_key_values,
@@ -1526,8 +1528,8 @@ class WBLVLMoEForCausalLM(WBLVLMoEPreTrainedModel, GenerationMixin):
         return input_ids, model_kwargs
 
 
-__all__ = ["WBLVLMoEForCausalLM", "WBLVLMoE_Model", "WBLVLMoEPreTrainedModel", "WBLVLMoE_TextModel"]
+__all__ = ["VaetkiVLForCausalLM", "VaetkiVLModel", "VaetkiVLPreTrainedModel", "VaetkiVLTextModel"]
 
 
-AutoConfig.register("wbl_vl_moe", WBLVLMoEConfig)
-AutoModelForCausalLM.register(WBLVLMoEConfig, WBLVLMoEForCausalLM)
+AutoConfig.register("vaetki_vl", VaetkiVLConfig)
+AutoModelForCausalLM.register(VaetkiVLConfig, VaetkiVLForCausalLM)
