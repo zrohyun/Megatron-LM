@@ -7,10 +7,10 @@ def _patch_transformers_version_check():
     our custom WBL implementation handles MoE correctly.
     """
     try:
-        from vllm.model_executor.models.transformers import base
+        from vllm.model_executor.models.transformers import Base
 
         # Store original check_version method
-        original_check_version = base.BaseTransformersModel.check_version
+        original_check_version = Base.check_version
 
         # Create patched version that skips MoE check
         def patched_check_version(self, min_version: str, feature_name: str):
@@ -21,7 +21,7 @@ def _patch_transformers_version_check():
             return original_check_version(self, min_version, feature_name)
 
         # Apply patch
-        base.BaseTransformersModel.check_version = patched_check_version
+        Base.check_version = patched_check_version
 
     except Exception as e:
         # If patch fails, log warning but don't crash
@@ -69,6 +69,12 @@ def register():
     # Register the vLLM-native WBL VLM model
     ModelRegistry.register_model(
         "WBLVLMoEForCausalLM",
+        "wbl_vlm.wbl_vllm:WBLVLMForConditionalGeneration",
+    )
+
+    # Register VaetkiVL model (same implementation)
+    ModelRegistry.register_model(
+        "VaetkiVLForCausalLM",
         "wbl_vlm.wbl_vllm:WBLVLMForConditionalGeneration",
     )
 

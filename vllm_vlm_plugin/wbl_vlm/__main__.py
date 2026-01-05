@@ -47,7 +47,7 @@ if __name__ == "__main__":
     )
 
     prompt = os.getenv("USER_PROMPT") or os.getenv("PROMPT", "Describe the image.")
-    image_path = os.getenv("IMAGE_PATH", "./test_images/mario.jpg")
+    image_path = os.getenv("IMAGE_PATH", "../test_images/mario.jpg")
 
     # Add image placeholder token to prompt
     # The model uses <|image_pad|> as the image token

@@ -660,15 +660,51 @@ class WBLDummyInputsBuilder(BaseDummyInputsBuilder):
         mm_counts: dict[str, int],
         mm_options: Optional[dict] = None,
     ) -> dict:
-        """Return dummy multimodal data for profiling."""
+        """
+        Return dummy multimodal data for profiling.
+
+        IMPORTANT: This method is used for memory profiling. The image size should match
+        the typical or maximum size used during inference. RiceGPT uses dynamic resolution
+        (min_pixels=3136, max_pixels=2560000), so images can vary in size.
+
+        For profiling, we use 448x448 as the default (typical usage), but this can be
+        adjusted based on your actual inference requirements:
+        - 448x448: Standard resolution, good for most tasks
+        - 896x896: High resolution for detailed images
+        - 1568x1568: Maximum safe resolution (max_pixels constraint)
+
+        If you expect to process larger images regularly, increase this size to avoid OOM.
+        """
         num_images = mm_counts.get("image", 0)
         if num_images == 0:
             return {}
 
-        # Create dummy images (small size for profiling)
-        # Use a size that matches Rice encoder expectations
+        # Get image processor to determine appropriate size
+        try:
+            image_processor = self.info.get_image_processor()
+            patch_size = getattr(image_processor, 'patch_size', 14)
+
+            # Use 448x448 as default (typical RiceGPT usage)
+            # This balances memory efficiency with compatibility
+            # Adjust if you need to support larger images regularly
+            image_size = 448
+
+            logger.info(
+                f"Using dummy image size {image_size}x{image_size} "
+                f"(patch_size={patch_size}). "
+                f"Adjust if larger images are expected in production."
+            )
+        except Exception as e:
+            # Fallback to standard default
+            logger.warning(
+                f"Could not get image processor config: {e}. "
+                f"Using default size 448x448"
+            )
+            image_size = 448  # Standard default for RiceGPT
+
+        # Create dummy images
         import PIL.Image
-        dummy_image = PIL.Image.new("RGB", (448, 448), color="white")
+        dummy_image = PIL.Image.new("RGB", (image_size, image_size), color="white")
 
         return {
             "image": [dummy_image] * num_images
