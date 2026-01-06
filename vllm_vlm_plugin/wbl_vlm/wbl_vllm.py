@@ -889,6 +889,11 @@ class WBLVLMForConditionalGeneration(nn.Module, SupportsMultiModal):
             image_grid_thw = torch.stack(image_grid_thw, dim=0)
             print(f"[DEBUG] After stack, image_grid_thw shape: {image_grid_thw.shape}")
 
+        # Normalize pixel_values to 3D: [batch, num_patches, features]
+        if pixel_values.dim() == 2:
+            pixel_values = pixel_values.unsqueeze(0)
+            print(f"[DEBUG] Added batch dim to pixel_values: {pixel_values.shape}")
+
         # Normalize grid_thw shape to 2D: [num_images, 3]
         if image_grid_thw.dim() == 3:
             image_grid_thw = image_grid_thw.squeeze(1)
@@ -903,11 +908,27 @@ class WBLVLMForConditionalGeneration(nn.Module, SupportsMultiModal):
         image_embeds = self.get_image_features(pixel_values, image_grid_thw)
 
         # Split embeddings by image
-        # Each image has t*h*w tokens where grid_thw = [t, h, w]
+        # IMPORTANT: Vision encoder applies spatial merge using integer division
+        # For grid_thw = [t, h, w], the actual output is:
+        #   t * (h // merge_size) * (w // merge_size)
+        # NOT (t * h * w) // merge_length, because odd dimensions lose remainder
+        #
+        # Example:
+        #   grid_thw = [1, 75, 42], merge_size = 2
+        #   Wrong: (1*75*42) // 4 = 787  (doesn't match Vision Encoder output)
+        #   Right: 1 * (75//2) * (42//2) = 1 * 37 * 21 = 777  (matches!)
+        #
+        # Previous version (INCORRECT for odd dimensions):
+        #   merge_length = self.visual.spatial_merge_size ** 2
+        #   num_tokens = (t.item() * h.item() * w.item()) // merge_length
+        #
+        # Current version (CORRECT):
+        merge_size = self.visual.spatial_merge_size
         embeddings_list = []
         start_idx = 0
         for t, h, w in image_grid_thw:
-            num_tokens = t.item() * h.item() * w.item()
+            # Calculate tokens the same way Vision Encoder does
+            num_tokens = t.item() * (h.item() // merge_size) * (w.item() // merge_size)
             end_idx = start_idx + num_tokens
             embeddings_list.append(image_embeds[start_idx:end_idx])
             start_idx = end_idx
